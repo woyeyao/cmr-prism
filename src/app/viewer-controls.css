@@ -1,0 +1,124 @@
+/* Wave cover and appearance controls are independent of study geometry. */
+:root {
+  --wave-face: #ffffffc4;
+  --wave-shade: #dcebea55;
+  --wave-edge: #c0d3d1;
+  --wave-rim: #ffffffb0;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #11171e;
+  --ink: #e4ecee;
+  --muted: #a0b0bc;
+  --line: #2e3c48;
+  --accent: #e2a18d;
+  --soft: #1e2933;
+  --scene-background: #11171e;
+  --wave-face: #294450ad;
+  --wave-shade: #142531a0;
+  --wave-edge: #779aab;
+  --wave-rim: #bce3ec30;
+}
+.header-actions { gap: 18px; }
+.theme-toggle { white-space: nowrap; min-height: 32px; padding: 5px 9px; border: 1px solid var(--line); border-radius: 3px; font-size: 12px; color: var(--muted); }
+.theme-toggle:hover { background: var(--soft); color: var(--ink); }
+.atlas-settings { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px 17px; }
+.spacing-control { display: flex; align-items: center; gap: 7px; width: 171px; white-space: nowrap; font-size: 12px; color: var(--muted); }
+.spacing-control input { min-width: 0; flex: 1; width: auto; }
+.spacing-control output { width: 31px; color: var(--ink); }
+.fps-control { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; font-size: 12px; letter-spacing: 0; }
+.fps-control input { width: 61px; min-height: 31px; padding: 3px 5px; border: 1px solid var(--line); border-radius: 2px; background: var(--paper); font-size: 14px; }
+.zoom-readout { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.image-canvas { cursor: grab; }
+.image-canvas:active { cursor: grabbing; }
+
+.welcome-object { perspective: 1100px; }
+.prism-object.wave-stack {
+  width: 486px;
+  height: 245px;
+  top: 45%;
+  animation: none;
+  transform: translate(-50%, -50%) rotateX(calc(17deg + var(--pointer-y, 0deg))) rotateY(calc(-26deg + var(--pointer-x, 0deg))) rotateZ(-12deg);
+}
+.object-slice.wave-box {
+  inset: auto;
+  top: 0;
+  left: calc(var(--slice) * 35px);
+  width: 171px;
+  height: 232px;
+  border: 1px solid var(--wave-edge);
+  border-radius: 8px;
+  background: linear-gradient(125deg, var(--wave-face), var(--wave-shade));
+  box-shadow: inset 0 0 0 5px var(--wave-rim), 5px 13px 22px #3049400c;
+  backdrop-filter: blur(1px);
+  animation: stack-wave 5.2s ease-in-out infinite;
+  animation-delay: calc(var(--slice) * -0.38s);
+  transform: translate3d(0, 0, calc(var(--slice) * 4px));
+}
+.wave-box::before { content: ""; position: absolute; top: 4px; right: -7px; bottom: -4px; width: 6px; border: 1px solid var(--wave-edge); border-left: 0; border-radius: 0 5px 5px 0; background: var(--wave-shade); transform: skewY(28deg); }
+.wave-box::after { inset: 15px; border-color: var(--wave-edge); opacity: .5; }
+.wave-box .object-ring { inset: 48px 31px 67px; border-width: 7px; opacity: .65; }
+.wave-box .object-index { left: 23px; bottom: 23px; color: var(--muted); font-size: 9px; }
+@keyframes stack-wave {
+  0%, 100% { transform: translate3d(0, 0, calc(var(--slice) * 4px)); }
+  25% { transform: translate3d(0, -54px, calc(var(--slice) * 4px)); }
+  75% { transform: translate3d(0, 54px, calc(var(--slice) * 4px)); }
+}
+
+:root[data-theme="dark"] .prism-shell,
+:root[data-theme="dark"] .prism-footer,
+:root[data-theme="dark"] .sidebar-toggle,
+:root[data-theme="dark"] .pane-toolbar,
+:root[data-theme="dark"] .window-inputs input,
+:root[data-theme="dark"] .prism-dialog,
+:root[data-theme="dark"] .relabel-control select { background: var(--paper); }
+:root[data-theme="dark"] .welcome { background: radial-gradient(ellipse at 76% 48%, #203038 0, var(--paper) 55%); }
+:root[data-theme="dark"] .series-rail,
+:root[data-theme="dark"] .note-label textarea { background: #151e27; }
+:root[data-theme="dark"] .mode-tabs,
+:root[data-theme="dark"] .series-card:hover,
+:root[data-theme="dark"] .series-card.is-selected,
+:root[data-theme="dark"] .series-filters button[aria-pressed="true"],
+:root[data-theme="dark"] .add-plane-button:hover,
+:root[data-theme="dark"] .add-plane-button.is-added { background: var(--soft); border-color: var(--line); }
+:root[data-theme="dark"] .series-card.is-selected { border-left-color: var(--accent); }
+:root[data-theme="dark"] .mode-tabs button[aria-pressed="true"],
+:root[data-theme="dark"] .layout-switch button[aria-pressed="true"] { background: #34434f; }
+:root[data-theme="dark"] .atlas-layer-strip button[aria-pressed="true"] { color: var(--paper); }
+:root[data-theme="dark"] .selection-chip { border-color: var(--line); }
+:root[data-theme="dark"] .series-name,
+:root[data-theme="dark"] .series-dimensions,
+:root[data-theme="dark"] .upload-hint,
+:root[data-theme="dark"] .detail-hint,
+:root[data-theme="dark"] .tray-hint { color: var(--muted); }
+:root[data-theme="dark"] .collection-warnings { color: #d1af9e; }
+:root[data-theme="dark"] .inference-badge { color: var(--accent) !important; border-color: #6f5248; }
+:root[data-theme="dark"] .glass-controls,
+:root[data-theme="dark"] .stage-load-indicator,
+:root[data-theme="dark"] .import-card { background: #17212bf2; }
+:root[data-theme="dark"] .primary-button { background: #d4e1e4; color: #16212c; }
+:root[data-theme="dark"] .primary-button:hover:not(:disabled) { background: #f0f8fa; }
+:root[data-theme="dark"] .dialog-backdrop { background: #080e17ad; }
+:root[data-theme="dark"] .import-progress { background: var(--line); }
+:root[data-theme="dark"] .object-orbit { border-color: #314751; }
+:root[data-theme="dark"] .orbit-three { border-color: #5b443b; }
+:root[data-theme="dark"] .object-ring { border-color: #97c2c54d; box-shadow: 0 0 0 1px #b0d4dd60, 0 0 0 16px #a0ccd015; }
+
+@media (max-width: 1100px) {
+  .atlas-settings { gap: 5px 10px; }
+  .atlas-settings .count-control, .spacing-control { width: 139px; }
+  .prism-object.wave-stack { scale: .8; }
+  .header-actions { gap: 9px; }
+}
+@media (max-width: 700px) {
+  .atlas-settings { flex-direction: column; gap: 4px; }
+  .atlas-settings .count-control, .spacing-control { width: 117px; font-size: 10px; }
+  .fps-control { gap: 3px; }
+  .fps-control input { width: 47px; }
+  .theme-toggle { padding: 4px 5px; font-size: 11px; }
+  .prism-object.wave-stack { scale: .6; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .prism-object.wave-stack { transform: translate(-50%, -50%) rotateX(17deg) rotateY(-26deg) rotateZ(-12deg) !important; }
+  .wave-box { transform: translate3d(0, calc((var(--slice) - 4) * -4px), calc(var(--slice) * 4px)); }
+}

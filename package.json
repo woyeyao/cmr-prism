@@ -1,0 +1,40 @@
+{
+  "name": "cmr-prism",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --hostname 127.0.0.1 --port 3001",
+    "build": "next build",
+    "start": "next start --hostname 127.0.0.1 --port 3001",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "verify:sample": "tsx scripts/verify-sample.ts",
+    "catalog:sample": "tsx scripts/catalog-sample.ts",
+    "verify:browser": "node scripts/visual-sample.mjs",
+    "verify:fluidity": "node scripts/verify-fluidity.mjs",
+    "verify:controls": "node scripts/verify-viewer-controls.mjs",
+    "audit:publication": "node scripts/audit-publication.mjs"
+  },
+  "dependencies": {
+    "@itk-wasm/image-io": "1.6.1",
+    "dcmjs": "0.52.0",
+    "next": "16.2.10",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "three": "0.178.0",
+    "yauzl": "3.4.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "^22.15.30",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.178.1",
+    "@types/yauzl": "^2.10.3",
+    "tsx": "^4.20.0",
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.10"
+  }
+}
