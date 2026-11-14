@@ -1,0 +1,43 @@
+.anatomy-stage {
+  --stage-background: radial-gradient(ellipse at 42% 36%, #21343f 0%, #11232d 48%, #091820 100%);
+  --stage-text: #dce9e9;
+  --stage-muted: #9ab1b8;
+  --stage-surface: #10222bea;
+  --stage-border: #78939950;
+  --stage-hover: #72999a30;
+  --stage-focus: #91d0c4;
+  --stage-shadow: #030b1640;
+  --stage-fallback: #11232d;
+  position: relative; isolation: isolate; min-width: 0; min-height: 320px; width: 100%; height: 100%; overflow: hidden;
+  background: var(--stage-background); color: var(--stage-text); border-radius: inherit; outline-offset: -3px;
+}
+.anatomy-stage[data-theme="light"] {
+  --stage-background: radial-gradient(ellipse at 42% 36%, #f8fbf8 0%, #e6eeeb 48%, #d6e2df 100%);
+  --stage-text: #263f43;
+  --stage-muted: #49646a;
+  --stage-surface: #f9fcf9eb;
+  --stage-border: #6987804d;
+  --stage-hover: #72999a26;
+  --stage-focus: #30796d;
+  --stage-shadow: #3051491a;
+  --stage-fallback: #e6eeeb;
+}
+.anatomy-stage > canvas:not(.anatomy-compass) { display: block; width: 100%; height: 100%; position: absolute; inset: 0; }
+.anatomy-stage__hint { position: absolute; top: 16px; left: 18px; max-width: calc(100% - 150px); font-size: 11px; color: var(--stage-muted); letter-spacing: .03em; pointer-events: none; }
+.anatomy-stage__hover { position: absolute; top: 42px; left: 16px; max-width: calc(100% - 32px); display: flex; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid var(--stage-border); background: var(--stage-surface); border-radius: 7px; font-size: 12px; pointer-events: none; }
+.anatomy-stage__hover i { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; }
+.anatomy-stage__controls { position: absolute; z-index: 2; bottom: 15px; right: 12px; display: flex; align-items: center; gap: 3px; padding: 4px; border: 1px solid var(--stage-border); background: var(--stage-surface); box-shadow: 0 6px 28px var(--stage-shadow); border-radius: 10px; white-space: nowrap; backdrop-filter: blur(12px); }
+.anatomy-stage__controls button { appearance: none; border: 0; color: var(--stage-text); background: transparent; padding: 8px 10px; border-radius: 6px; font: inherit; font-size: 12px; cursor: pointer; min-width: 30px; }
+.anatomy-stage__controls button:hover:not(:disabled) { background: var(--stage-hover); }
+.anatomy-stage__controls button:focus-visible { outline: 2px solid var(--stage-focus); outline-offset: -1px; }
+.anatomy-stage__controls button:disabled { opacity: .4; cursor: default; }
+.anatomy-stage__controls > span { width: 1px; height: 18px; background: var(--stage-border); margin: 0 3px; }
+.anatomy-stage__unavailable { position: absolute; z-index: 3; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--stage-text); padding: 20px; text-align: center; background: var(--stage-fallback); font-size: 13px; }
+.anatomy-stage__unavailable span { color: var(--stage-muted); }
+.anatomy-compass { position: absolute; right: 9px; top: 7px; width: 112px; height: 88px; pointer-events: none; }
+.anatomy-section, .anatomy-locator { position: relative; width: 100%; height: 100%; min-height: 210px; overflow: hidden; border-radius: inherit; background: #0d1b24; color: #dce9e9; }
+.anatomy-section canvas, .anatomy-locator canvas { display: block; position: absolute; inset: 0; width: 100%; height: 100%; }
+.anatomy-section__label { position: absolute; bottom: 8px; left: 10px; right: 10px; color: #aac1c6; text-align: center; font-size: 11px; pointer-events: none; }
+.anatomy-section__hover { position: absolute; top: 9px; left: 10px; right: 10px; text-align: center; pointer-events: none; font-size: 11px; color: #e4eeee; text-shadow: 0 1px 4px #000; }
+.anatomy-locator__label { position: absolute; left: 11px; top: 9px; right: 11px; color: #a2bbbf; font-size: 11px; pointer-events: none; }
+@media (max-width: 600px) { .anatomy-stage { min-height: 310px; } .anatomy-stage__hint { font-size: 10px; left: 12px; } .anatomy-stage__controls { bottom: 60px; } .anatomy-stage__controls button { padding: 9px 8px; } .anatomy-compass { width: 74px; height: 59px; } }

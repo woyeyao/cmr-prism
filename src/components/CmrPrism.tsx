@@ -13,6 +13,12 @@ import { FIT_IMAGE } from "@/core/imageTransform";
 import FrameRateControl from "./FrameRateControl";
 import ImageViewport from "@/presentation/ImageViewport";
 import type { GlassItem } from "@/presentation/GlassStage";
+import LocalStudyComparison from "./LocalStudyComparison";
+
+const AnatomyWorkspace = dynamic(() => import("./anatomy/AnatomyWorkspace"), {
+  ssr: false,
+  loading: () => <div className="glass-stage-loading" role="status">准备解剖课堂…</div>
+});
 
 const GlassStage = dynamic(() => import("@/presentation/GlassStage"), {
   ssr: false,
@@ -57,6 +63,7 @@ export default function CmrPrism() {
   const [organizeOpen, setOrganizeOpen] = useState(false);
   const [mergeIds, setMergeIds] = useState<string[]>([]);
   const [gpuUnavailable, setGpuUnavailable] = useState(false);
+  const [anatomyOpen, setAnatomyOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
   const welcomeObject = useRef<HTMLDivElement>(null);
@@ -112,7 +119,7 @@ export default function CmrPrism() {
         : active ? [active.cursor.collectionId] : [];
     return [...new Set([active?.cursor.collectionId, ...visibleCollectionIds].filter((id): id is string => !!id))].join("|");
   })();
-  const frames = useFrames(source, currentIds);
+  const frames = useFrames(anatomyOpen ? null : source, anatomyOpen ? [] : currentIds);
   const busy = currentIds.some((id) => !frames[id] || frames[id].loading);
   const frameFailed = currentIds.some((id) => frames[id]?.error);
 
@@ -131,34 +138,36 @@ export default function CmrPrism() {
   }, []);
 
   useEffect(() => {
-    if (!state.playing || busy || frameFailed) return;
+    if (anatomyOpen || !state.playing || busy || frameFailed) return;
     const timer = window.setTimeout(() => dispatch({ type: "tick" }), 1000 / state.playbackFps);
     return () => window.clearTimeout(timer);
-  }, [state.playing, state.playbackFps, state.viewports, state.phase, busy, frameFailed]);
+  }, [anatomyOpen, state.playing, state.playbackFps, state.viewports, state.phase, busy, frameFailed]);
   useEffect(() => { if (frameFailed && state.playing) dispatch({ type: "playing", playing: false }); }, [frameFailed, state.playing]);
   useEffect(() => {
-    if (!source) return;
+    if (!source || anatomyOpen) return;
     source.setPriorityFrames([...(descriptor ? [descriptor.id] : []), ...currentIds.filter((id) => id !== descriptor?.id)]);
   // Foreground priority follows the displayed frame set, including atlas and split panes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, descriptor?.id, currentIds.join("|")]);
+  }, [source, anatomyOpen, descriptor?.id, currentIds.join("|")]);
   useEffect(() => {
-    if (!source || busy) return;
+    if (!source || anatomyOpen) return;
+    if (busy) { source.prefetch([]); return; }
     const ids: string[] = [];
     for (const resolved of visibleResolved) if (resolved) {
       const slots = resolved.plane.frameIds;
       for (const delta of [1, 2, 3, -1]) { const id = slots[(resolved.cursor.frameIndex + delta + slots.length) % slots.length]; if (id) ids.push(id); }
     }
     source.prefetch(ids);
+    return () => source.prefetch([]);
   // Source requests are deduplicated; only update lookahead when the displayed frame set changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, busy, currentIds.join("|")]);
+  }, [source, anatomyOpen, busy, currentIds.join("|")]);
   useEffect(() => {
-    if (!source || !warmCollectionKey) return;
+    if (!source || !warmCollectionKey || anatomyOpen) return;
     const controller = new AbortController();
     void source.warmCine(warmCollectionKey.split("|"), controller.signal).catch(() => undefined);
     return () => controller.abort();
-  }, [source, warmCollectionKey]);
+  }, [source, anatomyOpen, warmCollectionKey]);
 
   useEffect(() => {
     const compactLayout = window.matchMedia("(max-width: 900px)");
@@ -178,7 +187,7 @@ export default function CmrPrism() {
     const keydown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement;
       if (target.closest("input, textarea, select, button, [contenteditable], [role=dialog]")) return;
-      if (event.defaultPrevented || !catalog || reportOpen || organizeOpen || event.altKey || event.ctrlKey || event.metaKey) return;
+      if (event.defaultPrevented || anatomyOpen || !catalog || reportOpen || organizeOpen || event.altKey || event.ctrlKey || event.metaKey) return;
       const keys: Record<string, ["time" | "space", number]> = { ArrowLeft: ["time", -1], ArrowRight: ["time", 1], ArrowUp: ["space", -1], ArrowDown: ["space", 1] };
       if (keys[event.key]) { event.preventDefault(); navigate(...keys[event.key]); }
       else if (event.key === " ") { event.preventDefault(); dispatch({ type: "playing", playing: !state.playing }); }
@@ -186,7 +195,14 @@ export default function CmrPrism() {
     };
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
-  }, [catalog, navigate, state.playing, reportOpen, organizeOpen]);
+  }, [anatomyOpen, catalog, navigate, state.playing, reportOpen, organizeOpen]);
+
+  function openAnatomy() {
+    dispatch({ type: "playing", playing: false });
+    setReportOpen(false);
+    setOrganizeOpen(false);
+    setAnatomyOpen(true);
+  }
 
   async function importFiles(files: File[]) {
     if (!files.length) return;
@@ -291,20 +307,23 @@ export default function CmrPrism() {
     </section>;
   }
 
-  return <main className={`prism-shell ${catalog ? "has-study" : "is-empty"}`} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); if (!loading) void importFiles(Array.from(e.dataTransfer.files)); }}>
+  const headerActions = <div className="header-actions"><button className="quiet-button anatomy-entry" data-testid="mode-anatomy" aria-pressed={anatomyOpen} onClick={() => anatomyOpen ? setAnatomyOpen(false) : openAnatomy()}>{anatomyOpen ? (catalog ? "返回影像" : "返回首页") : "解剖课堂"}</button><button className="theme-toggle" aria-label={theme === "light" ? "切换暗色模式" : "切换浅色模式"} aria-pressed={theme === "dark"} onClick={toggleTheme}>{theme === "light" ? "☾ 暗色" : "☀ 浅色"}</button><button className="import-button" disabled={loading} onClick={() => folderInput.current?.click()}>导入文件夹 <span>↗</span></button></div>;
+
+  return <main className={`prism-shell ${catalog ? "has-study" : "is-empty"}${anatomyOpen ? " has-anatomy" : ""}`} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); if (!loading) void importFiles(Array.from(e.dataTransfer.files)); }}>
     <input ref={fileInput} className="sr-only" type="file" multiple accept=".dcm,.dicom,.zip,application/dicom" onChange={filesChanged} aria-label="选择 DICOM 文件或 ZIP" />
     <input ref={folderInput} className="sr-only" type="file" multiple {...{ webkitdirectory: "", directory: "" }} onChange={filesChanged} aria-label="选择 DICOM 文件夹" />
-    <header className="prism-header">
+    {!anatomyOpen && <header className="prism-header">
       <a className="prism-brand" href="/" aria-label="CMR Prism 首页"><span className="brand-mark">◇</span><span><strong>CMR PRISM<span className="brand-dot">.</span></strong><small>心磁棱镜 / SPACE × TIME</small></span></a>
-      {catalog && <nav className="mode-tabs" aria-label="展示模式">
+      {catalog && !anatomyOpen && <nav className="mode-tabs" aria-label="展示模式">
         {([['atlas', '玻璃阵列'], ['inspect', '单张'], ['split', '分屏'], ['cube', '空间立方体']] as const).map(([mode, label]) => <button key={mode} data-testid={`mode-${mode}`} aria-pressed={state.mode === mode} disabled={mode === "cube" && state.selectedPlanes.length < 2} onClick={() => mode === "inspect" && state.mode === "split" && active ? dispatch({ type: "inspectViewport", viewportId: active.id }) : dispatch({ type: "mode", mode })}>{label}{mode === "cube" && <sup>{state.selectedPlanes.length}</sup>}</button>)}
       </nav>}
-      <div className="header-actions"><button className="theme-toggle" aria-label={theme === "light" ? "切换暗色模式" : "切换浅色模式"} aria-pressed={theme === "dark"} onClick={toggleTheme}>{theme === "light" ? "☾ 暗色" : "☀ 浅色"}</button><button className="import-button" disabled={loading} onClick={() => folderInput.current?.click()}>导入文件夹 <span>↗</span></button></div>
-    </header>
+      {headerActions}
+    </header>}
 
-    {!catalog ? <section className="welcome">
+    {anatomyOpen ? <AnatomyWorkspace theme={theme} headerActions={headerActions} onImport={() => folderInput.current?.click()} renderLocalStudy={source && catalog ? (viewId) => <LocalStudyComparison key={catalog.id} source={source} catalog={catalog} viewId={viewId} /> : undefined} /> : !catalog ? <section className="welcome">
       <div className="welcome-copy"><p className="eyebrow">CARDIAC MAGNETIC RESONANCE / 01</p><h1>心动，<br />逐帧可见<span>。</span></h1><p className="welcome-description">在时间与空间之间，<br />看见心脏的每一个切面。</p>
         <div className="welcome-import"><button className="primary-button" onClick={() => folderInput.current?.click()} disabled={loading}>导入 DICOM 文件夹 <span>↗</span></button><button className="text-button" onClick={() => fileInput.current?.click()} disabled={loading}>选择文件或 ZIP</button></div><p className="upload-hint">也可以将 DICOM 文件拖入此处 · 本机处理</p>
+        <div className="welcome-anatomy"><button className="quiet-button" onClick={openAnatomy}>探索心脏解剖 <span aria-hidden="true">↗</span></button><span>双图谱 · 标准切面 · 真实 Cine，无需导入</span></div>
         <div className="welcome-features"><span>01<span>短轴阵列</span></span><span>02<span>多视角联动</span></span><span>03<span>空间切面</span></span></div>
       </div>
       <div ref={welcomeObject} className="welcome-object" aria-hidden="true" onPointerMove={moveWelcomeParallax} onPointerLeave={resetWelcomeParallax}><div className="object-orbit orbit-one" /><div className="object-orbit orbit-two" /><div className="object-orbit orbit-three" /><div className="prism-object wave-stack">{Array.from({ length: 10 }, (_, i) => <div key={i} className="object-slice wave-box" style={{ "--slice": i } as CSSProperties}><span className="object-ring" /><span className="object-index">S–{String(i + 1).padStart(2, "0")}</span></div>)}</div><div className="object-caption"><span>4D</span><small>SPATIAL PLANES<br />CARDIAC PHASES</small></div><p className="object-footnote">SPACE × TIME / CMR PRISM</p></div>
@@ -348,13 +367,13 @@ export default function CmrPrism() {
       </aside>
     </div>}
 
-    <footer className="prism-footer">{catalog && active ? <>
+    {!anatomyOpen && <footer className="prism-footer">{catalog && active ? <>
       <button data-testid="play-button" className="play-button" aria-label={state.playing ? "暂停" : "播放"} disabled={(activeResolved?.plane.frameIds.length ?? 1) < 2} onClick={() => dispatch({ type: "playing", playing: !state.playing })}>{state.playing ? "Ⅱ" : "▶"}</button>
       <div className="navigation-track"><label>{collection?.axisKind === "cardiac" ? "心动相位" : collection?.axisLabel ?? "帧"}<output>{(active.cursor.frameIndex ?? 0) + 1}<span> / {activeResolved?.plane.frameIds.length ?? 1}</span></output></label><input data-testid="time-slider" aria-label="时间或采样帧" type="range" min={0} max={Math.max(0, (activeResolved?.plane.frameIds.length ?? 1) - 1)} value={Math.max(0, active.cursor.frameIndex)} onChange={(e) => dispatch({ type: "frame", viewportId: active.id, index: Number(e.target.value) })} /></div>
       <div className="navigation-track layer-track"><label>空间层位<output>{active.cursor.planeIndex + 1}<span> / {collection?.planes.length}</span></output></label><input data-testid="layer-slider" aria-label="空间层位" type="range" min={0} max={Math.max(0, (collection?.planes.length ?? 1) - 1)} value={active.cursor.planeIndex} onChange={(e) => dispatch({ type: "plane", viewportId: active.id, index: Number(e.target.value) })} /></div>
       <FrameRateControl value={state.playbackFps} onChange={(fps) => dispatch({ type: "fps", fps })} />
       <span className="keyboard-hint">滚轮 / ← → 时间 <span>↑ ↓ 层位</span></span>
-    </> : <><span>CMR PRISM / 心磁棱镜</span><span>空间 · 时间 · 多视角</span><span>LOCAL FIRST</span></>}</footer>
+    </> : <><span>CMR PRISM / 心磁棱镜</span><span>空间 · 时间 · 多视角</span><span>LOCAL FIRST</span></>}</footer>}
 
     {loading && <div className="import-overlay" role="status"><div className="import-card"><span className="eyebrow">IMPORTING STUDY</span><h2>{progress < 1 ? "正在导入影像" : "正在整理时空维度"}</h2><p>{progress < 1 ? `${Math.round(progress * 100)}% · 文件传输到本机服务` : "识别序列、空间层位和采样帧…"}</p><div className={`import-progress ${progress === 1 ? "is-processing" : ""}`}><span style={{ width: `${Math.max(3, progress * 100)}%` }} /></div><button className="text-button" onClick={() => importController.current?.abort()}>取消导入</button></div></div>}
     {message && <div className="toast" role="alert"><span>{message}</span><button aria-label="关闭消息" onClick={() => setMessage("")}>×</button></div>}
