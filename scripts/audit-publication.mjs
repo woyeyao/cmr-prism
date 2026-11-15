@@ -13,9 +13,18 @@ if (worktree && arguments_.length !== 1) throw new Error('--worktree cannot be c
 const refs = worktree ? [] : arguments_.length ? arguments_ : ['HEAD'];
 if (refs.some(ref => ref.startsWith('-'))) throw new Error('Expected explicit Git refs or --worktree');
 const git = (...args) => execFileSync('git', args, { maxBuffer: 32 * 1024 * 1024 });
-const identity = 'CMR Prism Contributors';
-const email = 'cmr-prism@users.noreply.github.com';
+// Keep the published anonymous history valid; new work uses the verified account.
+// Exact name/email pairs are allowlisted. Email hashes avoid another plaintext
+// copy in source; Git commit metadata still publishes the chosen author email.
+const publicIdentities = [
+  { name: 'woyeyao', emailSha256: '59c3ca54b07027e22f816f1260d9ce200231f3f4f1a29939b1df5a6768438d09' },
+  { name: 'CMR Prism Contributors', emailSha256: '8547365ae3a87cd030adc98c4ed5934f45aa754bc51a015d3fef229b6ed28b77' },
+];
+const publicEmailHashes = new Set(publicIdentities.map(identity => identity.emailSha256));
+const isPublicIdentity = (name, email) => typeof email === 'string'
+  && publicIdentities.some(identity => identity.name === name && identity.emailSha256 === digest(email));
 const binaryAssets = new Map([
+  ['public/social-preview.png', { bytes: 265410, sha256: '204f117f8798fbb4631d8fe78435b36d206869b897f6b12b857cc1895779c79b' }],
   ['public/fonts/MiSans-Bold.woff2', { bytes: 5081104, sha256: '1c5a7515b61bc82baaa2e2c2fdae2032479fb9a99e09d4d021dc17314fc5939b' }],
   ['public/fonts/MiSans-Light.woff2', { bytes: 4810368, sha256: '2d1502a1cf0e41917844b512fb64be547cfb737e593d0da782c6b6762ea71c33' }],
   ['public/fonts/MiSans-Regular.woff2', { bytes: 4858624, sha256: 'd704c1a932c0bd7e8a071d276cd81c0ed0c9fecfa26ac234f4bed0559fe1cb2d' }],
@@ -58,7 +67,7 @@ function scanText(text, path) {
   for (const [reason, pattern] of patterns) {
     pattern.lastIndex = 0;
     const matches = reason === 'private-email'
-      ? [...text.matchAll(pattern)].some(match => match[0] !== email) : pattern.test(text);
+      ? [...text.matchAll(pattern)].some(match => !publicEmailHashes.has(digest(match[0]))) : pattern.test(text);
     if (matches) report(path, reason);
   }
 }
@@ -187,7 +196,7 @@ function auditSnapshot(files) {
 for (const commit of commits) {
   scanText(git('cat-file', '-p', commit).toString('utf8'), `commit:${commit.slice(0, 12)}`);
   const metadata = git('show', '-s', '--format=%an%n%ae%n%cn%n%ce', commit).toString('utf8').trim().split('\n');
-  if (metadata[0] !== identity || metadata[2] !== identity || metadata[1] !== email || metadata[3] !== email) report(`commit:${commit.slice(0, 12)}`, 'non-anonymous-commit-identity');
+  if (!isPublicIdentity(metadata[0], metadata[1]) || !isPublicIdentity(metadata[2], metadata[3])) report(`commit:${commit.slice(0, 12)}`, 'unapproved-public-commit-identity');
   const files = new Map();
   for (const entry of git('ls-tree', '-r', '-z', commit).toString('utf8').split('\0').filter(Boolean)) {
     const match = /^(\d+) (\w+) ([a-f0-9]+)\t(.+)$/s.exec(entry);
@@ -224,7 +233,8 @@ for (const ref of refs) {
   if (git('cat-file', '-t', ref).toString('utf8').trim() === 'tag') {
     const tag = git('cat-file', '-p', ref).toString('utf8');
     scanText(tag, ref);
-    if (!tag.includes(`\ntagger ${identity} <${email}> `)) report(ref, 'non-anonymous-tag-identity');
+    const tagger = /^tagger (.*?) <([^<>]*)> \d+ [+-]\d{4}$/m.exec(tag.split('\n\n', 1)[0]);
+    if (!tagger || !isPublicIdentity(tagger[1], tagger[2])) report(ref, 'unapproved-public-tag-identity');
   }
 }
 

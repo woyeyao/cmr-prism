@@ -381,7 +381,7 @@ export default function CmrPrism() {
   </header>}
 
   {anatomyOpen ? <AnatomyClassroom theme={theme} headerActions={headerActions} onImport={() => folderInput.current?.click()} renderLocalStudy={source && catalog ? (viewId) => <LocalStudyComparison key={catalog.id} source={source} catalog={catalog} viewId={viewId}/> : undefined}/> : !catalog ? <section className="welcome">
-   <div className="welcome-copy"><p className="eyebrow">CARDIAC MAGNETIC RESONANCE / 01</p><h1>{t("心动，")}<br />{t("逐帧可见")}<span>{t("。")}</span></h1><p className="welcome-description">{t("在时间与空间之间，")}<br />{t("看见心脏的每一个切面。")}</p>
+   <div className="welcome-copy"><p className="eyebrow">CARDIAC MAGNETIC RESONANCE / 01</p><h1>{t("心动，")}<br />{t("逐帧可见")}<span>{t("。")}</span></h1><p className="welcome-description">{t("心脏磁共振阅片 × 三维解剖学习，")}<br />{t("把灰度影像与心脏的空间结构联系起来。")}</p>
     <div className="welcome-import"><button className="primary-button" onClick={() => folderInput.current?.click()} disabled={loading}>{t("导入 DICOM 文件夹")} <span>↗</span></button><button className="text-button" onClick={() => fileInput.current?.click()} disabled={loading}>{t("选择文件或 ZIP")}</button></div><p className="upload-hint">{t("也可以将 DICOM 文件拖入此处 · 本机处理")}</p>
     <div className="welcome-anatomy"><button className="quiet-button" onClick={openAnatomy}>{t("探索心脏解剖")} <span aria-hidden="true">↗</span></button><span>{t("双图谱 · 标准切面 · 真实 Cine，无需导入")}</span></div>
     <div className="welcome-features"><span>01<span>{t("短轴阵列")}</span></span><span>02<span>{t("多视角联动")}</span></span><span>03<span>{t("空间切面")}</span></span></div>

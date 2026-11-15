@@ -6,7 +6,8 @@
 
 | 文件 | 职责 |
 | --- | --- |
-| [README](../README.md) | 项目简介、启动及用户操作 |
+| [README](../README.md) / [中文](../README.zh-CN.md) | 项目双重定位、启动及用户操作 |
+| [SHARING](SHARING.md) | 可发布的中英文短文案、渠道建议及图像复用边界 |
 | [PROJECT](PROJECT.md) | 已实现任务、依赖、验收与剩余问题 |
 | [ARCHITECTURE](ARCHITECTURE.md) | 数据流、模块接口与关键不变量 |
 | [SEQUENCES](SEQUENCES.md) | 序列识别、样例内容和语义边界 |

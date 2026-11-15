@@ -1,0 +1,17 @@
+CMR Prism — public share preview
+social-preview.png, 1200×630; actual public classroom captures, arranged for README and social sharing.
+https://woyeyao.github.io/cmr-prism/
+
+Anatomy: BodyParts3D v4.0, © The Database Center for Life Science, licensed under CC Attribution 4.0 International.
+https://dbarchive.biosciencedbc.jp/en/bodyparts3d/
+https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html
+https://creativecommons.org/licenses/by/4.0/
+The project's derivatives use mesh simplification, cropping, coordinate quantization and candidate teaching planes. No anatomical geometry was invented for these images. Great vessels were hidden using the classroom control. Screenshots are cropped/framed and scaled in the poster layout.
+
+CMR reference: Auckland MRI Research Group (AMRG), Auckland, New Zealand; public-domain Cardiac Atlas reference images.
+https://www.cardiacatlas.org/amrg-cardiac-atlas/
+https://www.cardiacatlas.org/
+Atlas and MR are from different subjects. Side-by-side educational reference, not patient-level registration or phase synchronization. These are public atlas assets, not locally imported patient data.
+
+Source details and limitations: https://github.com/woyeyao/cmr-prism/blob/main/docs/ANATOMY.md
+Model and reference pixels are genuine application captures. Headings and framing were laid out in HTML/CSS; no generated MRI or AI anatomy was used.

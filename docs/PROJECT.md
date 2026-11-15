@@ -1,6 +1,12 @@
 # 项目台账
 
-更新：2026-11-15。当前版本 `v0.3.0`，提供本机完整工作台与 GitHub Pages 公开解剖课堂。检查的实际结果统一写入 [VALIDATION](VALIDATION.md)，未完成能力统一写入 [ROADMAP](ROADMAP.md)。
+更新：2026-11-15。当前版本 `v0.3.0`。
+
+**定位：CMRI 阅片工作台 + CMR × 3D 交互教程。** 本机查看器支持 DICOM、Cine、多序列及采集平面的空间比较；教学工作区通过自由剖切、彩色断面与真实 CMR 对照，帮助理解影像和心脏解剖的联系。教程可独立通过 GitHub Pages 体验，也可在本机结合自己的影像使用。
+
+**Positioning: a CMRI viewer and an interactive CMR × 3D anatomy tutorial.** Read local DICOM across space and time, freely cut anatomical models, and compare sections with real CMR references. The tutorial is available online; the full viewer runs locally.
+
+完整介绍与操作提供 [中文](../README.zh-CN.md)／[English](../README.md) 两版。实际检查统一写入 [VALIDATION](VALIDATION.md)，未完成能力统一写入 [ROADMAP](ROADMAP.md)。
 
 ## 当前交付
 
