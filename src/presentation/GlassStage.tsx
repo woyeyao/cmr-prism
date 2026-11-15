@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { PlaneGeometry, ScalarFrame, WindowLevel } from "../core/types";
 import { createGlassRuntime, type GlassRuntime } from "./glassRuntime";
+import { useI18n } from "@/i18n";
 
 export type GlassItem = {
   id: string;
@@ -28,7 +29,12 @@ export type GlassStageProps = {
   className?: string;
 };
 
-type StageCallbacks = Pick<GlassStageProps, "onSelect" | "onInspect" | "onNavigate" | "onUnavailable">;
+function translatedFailure(reason: string, t: (message: string, params?: Record<string, string | number>) => string): string {
+  for (const prefix of ["WebGPU 设备已丢失：", "无法创建 WebGPU 或 WebGL2 玻璃场景。", "三维场景渲染失败："]) {
+    if (reason.startsWith(prefix)) return t(prefix) + reason.slice(prefix.length).replace("未知原因", t("未知原因"));
+  }
+  return t(reason);
+}
 
 function isTextEntry(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -48,13 +54,14 @@ export default function GlassStage({
   onUnavailable,
   className
 }: GlassStageProps) {
+  const { t } = useI18n();
   const stageRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<GlassRuntime | null>(null);
-  const latestRef = useRef({ items, mode, activeId, atlasSpacing, theme, onSelect, onInspect, onNavigate, onUnavailable });
+  const latestRef = useRef({ items, mode, activeId, atlasSpacing, theme, onSelect, onInspect, onNavigate, onUnavailable, t });
   const [status, setStatus] = useState<"starting" | "ready" | "unavailable">("starting");
   const [backend, setBackend] = useState<"WebGPU" | "WebGL2" | null>(null);
 
-  latestRef.current = { items, mode, activeId, atlasSpacing, theme, onSelect, onInspect, onNavigate, onUnavailable };
+  latestRef.current = { items, mode, activeId, atlasSpacing, theme, onSelect, onInspect, onNavigate, onUnavailable, t };
 
   useEffect(() => {
     const host = stageRef.current;
@@ -65,7 +72,7 @@ export default function GlassStage({
       onInspect: (id: string) => latestRef.current.onInspect?.(id),
       onUnavailable: (reason: string) => {
         setStatus("unavailable");
-        latestRef.current.onUnavailable?.(reason);
+        latestRef.current.onUnavailable?.(translatedFailure(reason, latestRef.current.t));
       }
     };
 
@@ -75,6 +82,7 @@ export default function GlassStage({
         return;
       }
       runtimeRef.current = runtime;
+      runtime.setAccessibleLabel(latestRef.current.t("CMR 玻璃切片场景"));
       runtime.update(latestRef.current.items, latestRef.current.mode, latestRef.current.activeId, latestRef.current.atlasSpacing, latestRef.current.theme);
       setBackend(runtime.backend);
       setStatus("ready");
@@ -82,7 +90,7 @@ export default function GlassStage({
       if (cancelled) return;
       const reason = error instanceof Error ? error.message : "玻璃场景初始化失败。";
       setStatus("unavailable");
-      latestRef.current.onUnavailable?.(reason);
+      latestRef.current.onUnavailable?.(translatedFailure(reason, latestRef.current.t));
     });
 
     return () => {
@@ -91,6 +99,8 @@ export default function GlassStage({
       runtimeRef.current = null;
     };
   }, []);
+
+  useEffect(() => { runtimeRef.current?.setAccessibleLabel(t("CMR 玻璃切片场景")); }, [t]);
 
   useEffect(() => {
     runtimeRef.current?.update(items, mode, activeId, atlasSpacing, theme);
@@ -140,29 +150,29 @@ export default function GlassStage({
       data-testid="glass-stage"
       data-backend={backend ?? undefined}
       role="region"
-      aria-label={mode === "atlas" ? "CMR 短轴玻璃阵列" : "CMR 空间切片立方体"}
+      aria-label={t(mode === "atlas" ? "CMR 短轴玻璃阵列" : "CMR 空间切片立方体")}
       tabIndex={0}
       onKeyDown={handleKeyDown}
     >
       {status !== "ready" && (
         <div className="glass-status" role="status" aria-live="polite">
-          {status === "starting" ? "正在准备玻璃影像场景…" : "三维场景暂不可用，二维影像仍可继续浏览。"}
+          {t(status === "starting" ? "正在准备玻璃影像场景…" : "三维场景暂不可用，二维影像仍可继续浏览。")}
         </div>
       )}
       {status === "ready" && (
         <div className="glass-status glass-status--ready" aria-live="polite">
           {backend} · {mode === "atlas"
-            ? `${items.length} 个层位`
-            : `${items.filter((item) => (item.geometry ?? item.frame?.descriptor.geometry)?.frameOfReferenceUid.trim()).length} 个可定位平面 · L 左 / P 后 / S 上`}
+            ? t("{count} 个层位", { count: items.length })
+            : t("{count} 个可定位平面 · L 左 / P 后 / S 上", { count: items.filter((item) => (item.geometry ?? item.frame?.descriptor.geometry)?.frameOfReferenceUid.trim()).length })}
         </div>
       )}
-      <div className={`glass-controls glass-controls--${mode}`} role="group" aria-label="场景视角控制">
+      <div className={`glass-controls glass-controls--${mode}`} role="group" aria-label={t("场景视角控制")}>
         <span className="glass-controls__hint" aria-hidden="true">
-          {mode === "atlas" ? "拖动旋转 · Shift / 右键平移" : "拖动旋转 · 重置恢复默认视角"}
+          {t(mode === "atlas" ? "拖动旋转 · Shift / 右键平移" : "拖动旋转 · 重置恢复默认视角")}
         </span>
-        <button className="glass-controls__button glass-controls__button--zoom-out" type="button" aria-label="缩小场景" title="缩小" onClick={() => zoom(1.18)}>−</button>
-        <button className="glass-controls__button glass-controls__button--reset" type="button" aria-label="重置场景视角" title="重置视角" onClick={() => runtimeRef.current?.resetCamera()}>重置</button>
-        <button className="glass-controls__button glass-controls__button--zoom-in" type="button" aria-label="放大场景" title="放大" onClick={() => zoom(0.84)}>＋</button>
+        <button className="glass-controls__button glass-controls__button--zoom-out" type="button" aria-label={t("缩小场景")} title={t("缩小")} onClick={() => zoom(1.18)}>−</button>
+        <button className="glass-controls__button glass-controls__button--reset" type="button" aria-label={t("重置场景视角")} title={t("重置视角")} onClick={() => runtimeRef.current?.resetCamera()}>{t("重置")}</button>
+        <button className="glass-controls__button glass-controls__button--zoom-in" type="button" aria-label={t("放大场景")} title={t("放大")} onClick={() => zoom(0.84)}>＋</button>
       </div>
     </div>
   );

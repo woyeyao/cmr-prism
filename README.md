@@ -1,6 +1,10 @@
 # CMR Prism / 心磁棱镜
 
-把心脏解剖、切面与真实磁共振放在一起学习。应用在本机运行，支持双图谱解剖课堂和完整的 DICOM 浏览器。
+把心脏解剖、切面与真实磁共振放在一起学习。支持中英切换、课程切面与自由三维剖切。
+
+**[在线解剖课堂](https://woyeyao.github.io/cmr-prism/)** · [GitHub 源码](https://github.com/woyeyao/cmr-prism)
+
+在线版无需安装，包含两套公开图谱和 AMRG 参考影像。本机版另外提供 DICOM 导入和完整阅片工作台；在线版不提供上传入口。
 
 ## 本机运行
 
@@ -20,9 +24,13 @@ npm run dev
 1. 选择 BodyParts3D 或 HRA 图谱，再按课程选择定位、长轴、短轴或流出道。切换模型保留视图名称，各标本使用自己的切面；缺少预设时明确提示。
 2. 在三维心脏上旋转、平移、缩放；「正对切面」查看切口。「A 侧 / B 侧」独立控制，均关闭可只看断面。
 3. 观察同一切面的二维彩色断面与定位线，可切换参考面交叉核对、点击「放大」并排细看。二维填色、三维切口填色、血池、大血管和结构显隐分别控制。
-4. 展开高级切面调整，沿模型 X/Y/Z 轴拖动滑块或输入毫米数；法线偏移与双轴倾斜可叠加。三处显示同步更新，重置恢复候选，也可导出完整参数。相机旋转不会改变切面。
-5. 查看 AMRG 灰度参考影像和 Cine；导入自己的 DICOM 后可切换「本机病例」，自行选择序列、层位、时间帧、窗宽窗位。对照影像可放大，收起后保留原播放位置。
-6. 拖动分隔条调整目录、模型、断面、定位图及对照区域所占空间；可交换面板位置或重置布局。课堂采用合并顶栏，按桌面工作区设计。模型背景跟随深浅主题。
+4. 课程模式中展开切面微调，沿 X/Y/Z 移动或叠加法线偏移、双轴倾斜。三处显示同步，重置恢复候选，支持导出参数。相机旋转不会改变切面。
+5. 查看 AMRG 灰度参考影像和 Cine；导入自己的 DICOM 后可切换「本机病例」，自行选择序列、层位、时间帧、窗宽窗位。对照影像可放大，收起后保留原播放位置。拖宽右栏会按图像真实比例同步增高；本机影像考虑 PixelSpacing。纵向拖动增加高度留白，双击分隔条恢复等比高度。
+6. 拖动分隔条调整目录、模型、断面、定位图及对照区域所占空间；可交换面板位置或重置布局。课堂采用合并顶栏，按桌面工作区设计。模型背景跟随深浅主题。顶部 English／中文切换语言并记住选择。
+
+### 自由切面
+
+顶部点击「自由切面」，进入只有三维模型的编辑区。拖动彩色轴平移、拖动旋转环改变方向；`G` 切换移动、`R` 切换旋转、`Esc` 返回观察。XYZ 数值不设旧范围限制，角度可超过一整圈，滑块视程可扩展；还可输入法线。旋转始终以当前切面中心为轴。支持保留正侧／负侧、整心、仅断面、恢复起点和参数导出。课程与自由编辑独立，切换模式会重新初始化该模式。
 
 **图谱是静态标本，MR 来自另一受试者。** 并排显示用于比较解剖类型，不表示同人配准、时相同步或精确逐像素对应。预设均为待复核候选；微调不会改变 MR 采集位置。心肌填色保留腔隙，管腔几何只画轮廓，开放轮廓不补成组织。
 
@@ -59,9 +67,21 @@ npm run dev
 
 - 支持传统 MR 和未压缩整数 Enhanced MR；压缩传统单帧使用 ITK-Wasm。压缩多帧、浮点 MR、独立 Parametric Map、NIfTI、ROI 和定量分析尚未实现。
 - 本机影像不发送外部服务。目录和像素分离按需读取，客户端像素缓存上限 128 MiB，后台预热有并发与预算限制。
-- 会话、备注和切片选择不持久化；正常关闭或替换时释放会话，30 分钟闲置清理兜底。强制终止服务可能留下系统临时文件。
-- 三维故障时仍可浏览二维。暗色主题只改变界面，不改变灰度像素。浏览器仅保存主题偏好。
+- 会话、备注和切片选择不持久化；正常关闭或替换时释放会话；取消导入会中止后续处理，等待正在使用文件的任务结束后清理。30 分钟闲置清理兜底。强制终止服务可能留下系统临时文件。
+- 三维故障时仍可浏览二维。暗色主题只改变界面，不改变灰度像素。浏览器仅保存主题和语言偏好。
 - 图谱资源共用一份紧凑网格和一套公开参考帧；署名、许可与文件校验记录在 `public/anatomy/`。真实病例和本机截图不公开。
+
+## 静态部署
+
+`npm run build:pages` 构建独立课堂，`npm run verify:pages` 核对产物与资源路径。输出位于已忽略的 `artifacts/pages`，默认网址前缀 `/cmr-prism`；不包含本机病例 API、上传入口或服务端源码。构建前停止本机服务，完成后如需本机完整版，重新执行 `npm run build`、`npm start`。
+
+GitHub Actions 在 `main` 更新时检查并发布该静态目录；构建与正常本机入口共用组件，避免维护第二份课堂。设置及发布检查见 [PUBLICATION](docs/PUBLICATION.md)。
+
+## English
+
+[Open the anatomy classroom](https://woyeyao.github.io/cmr-prism/) and choose **English** in the toolbar. Explore BodyParts3D and HRA with guided planes, or use **Free slicing** to move and rotate a cutting plane directly in 3D. CMR references resize proportionally and can be expanded without resetting playback.
+
+The online site contains public atlas resources only. For local DICOM import and the full viewer, use Node.js 22/24, run `npm ci` and `npm run dev`, then open `http://127.0.0.1:3001`. Data stays on your computer. Atlas planes remain teaching candidates; the atlas and reference MR are not registered to each other.
 
 ## 开发与文档
 

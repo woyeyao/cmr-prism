@@ -5,6 +5,7 @@ import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent }
 import type { ImageTransform, ReferenceLine, ScalarFrame, WindowLevel } from "../core/types";
 import { FIT_IMAGE, imageRectangle, normalizeImageTransform, zoomImageAt } from "../core/imageTransform";
 import { grayscaleRgba } from "./grayscale";
+import { useI18n } from "@/i18n";
 
 export type ImageViewportProps = {
   frame: ScalarFrame | null;
@@ -47,8 +48,10 @@ export default function ImageViewport({
   onTransformChange,
   onNavigate,
   className,
-  label = "影像视口",
+  label,
 }: ImageViewportProps) {
+  const { t } = useI18n();
+  const viewportLabel = label ?? t("影像视口");
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -217,7 +220,7 @@ export default function ImageViewport({
     onActivate?.();
   }, [onActivate]);
 
-  const status = error ?? (loading ? "正在加载影像…" : frame && !pixelCountMatches ? "影像尺寸与像素数据不匹配" : !frame ? "等待影像" : null);
+  const status = error ? t(error) : (loading ? t("正在加载影像…") : frame && !pixelCountMatches ? t("影像尺寸与像素数据不匹配") : !frame ? t("等待影像") : null);
   const svgViewBox = descriptor && rows > 0 && columns > 0 ? `-0.5 -0.5 ${columns} ${rows}` : "-0.5 -0.5 1 1";
 
   return (
@@ -229,13 +232,13 @@ export default function ImageViewport({
       data-pan-x={transform.panX.toFixed(3)}
       data-pan-y={transform.panY.toFixed(3)}
       role="group"
-      aria-label={label}
+      aria-label={viewportLabel}
     >
       <canvas
         ref={canvasRef}
         className="image-canvas"
         data-testid="image-viewport"
-        aria-label={descriptor ? `${label}，${rows} 行 × ${columns} 列` : label}
+        aria-label={descriptor ? t("{label}，{rows} 行 × {columns} 列", { label: viewportLabel, rows, columns }) : viewportLabel}
         tabIndex={0}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}

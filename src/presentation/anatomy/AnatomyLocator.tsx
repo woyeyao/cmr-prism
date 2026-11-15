@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import type { AnatomyModel } from "@/core/anatomy/types";
 import { planeIntersection } from "@/core/anatomy/geometry";
+import { useI18n } from "@/i18n";
 import { DEFAULT_ANATOMY_OPTIONS, drawSections, getPlaneFrame, getSections, sectionDrawings, sectionExtent, sectionViewport, type AnatomyRenderOptions, type RenderPlane } from "./rendering";
 import "./anatomy-rendering.css";
 
@@ -16,12 +17,13 @@ export interface AnatomyLocatorProps {
 }
 
 export default function AnatomyLocator({ model, plane, referencePlane, options = DEFAULT_ANATOMY_OPTIONS, className }: AnatomyLocatorProps) {
+  const { t } = useI18n();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const reference = referencePlane ?? model.presets.find(preset => "referenceViewId" in plane && preset.id === plane.referenceViewId)
     ?? model.presets.find(preset => preset.id === "4ch") ?? model.presets[0];
   const sections = useMemo(() => reference ? getSections(model, reference) : [], [model, reference]);
   const drawings = useMemo(() => sectionDrawings(sections), [sections]);
-  const label = reference && "label" in reference ? reference.label : "参考面";
+  const label = t(reference && "label" in reference ? reference.label : "参考面");
   const extent = sectionExtent(sections, model);
   const line = reference ? planeIntersection(getPlaneFrame(reference), getPlaneFrame(plane), extent) : null;
 
@@ -55,15 +57,15 @@ export default function AnatomyLocator({ model, plane, referencePlane, options =
       }
       ctx.restore(); ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = "#8eafb5"; ctx.font = `${10 * dpr}px system-ui, sans-serif`; ctx.textAlign = "center";
-      ctx.fillText(line ? "实线为当前平面与参考面的交线" : "两平面平行、重合或交线超出画面", w / 2, h - 10 * dpr);
+      ctx.fillText(t(line ? "实线为当前平面与参考面的交线" : "两平面平行、重合或交线超出画面"), w / 2, h - 10 * dpr, Math.max(1, w - 20 * dpr));
     };
     const request = () => { if (!raf) raf = requestAnimationFrame(render); };
     const observer = new ResizeObserver(request); observer.observe(canvas); request();
     return () => { observer.disconnect(); if (raf) cancelAnimationFrame(raf); };
-  }, [drawings, extent, line, model, options, plane, reference, sections]);
+  }, [drawings, extent, line, model, options, plane, reference, sections, t]);
 
-  return <div className={`anatomy-locator ${className ?? ""}`} data-testid="anatomy-locator" role="img" aria-label={`${label}上的当前切面定位线`}>
+  return <div className={`anatomy-locator ${className ?? ""}`} data-testid="anatomy-locator" role="img" aria-label={t("{label}上的当前切面定位线", { label })}>
     <canvas ref={canvasRef} />
-    <div className="anatomy-locator__label">{label} · 图谱参考面</div>
+    <div className="anatomy-locator__label">{label} · {t("图谱参考面")}</div>
   </div>;
 }

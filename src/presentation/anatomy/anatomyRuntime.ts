@@ -1,11 +1,13 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import type { AnatomyMesh, AnatomyModel, PlaneFrame } from "@/core/anatomy/types";
 import { drawSections, enabledSection, getPlaneFrame, getSections, modelBounds, sectionDrawings, sectionExtent, type AnatomyRenderOptions, type RenderPlane } from "./rendering";
 
 export interface AnatomyRuntime {
   update: (plane: RenderPlane, options: AnatomyRenderOptions, selectedId?: string | null) => void;
   setTheme: (theme: "light" | "dark") => void;
+  setPlaneControl: (mode: PlaneControlMode) => void;
   resetView: () => void;
   alignView: () => void;
   flipView: () => void;
@@ -13,18 +15,21 @@ export interface AnatomyRuntime {
   dispose: () => void;
 }
 
+export type PlaneControlMode = "translate" | "rotate" | null;
+
 type BodyMesh = THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
 
 /** The patient/specimen coordinates never move; only the camera and clip plane change. */
 export function createAnatomyRuntime(
   host: HTMLDivElement, model: AnatomyModel,
-  callbacks: { onHover: (mesh: AnatomyMesh | null) => void; onSelect: (id: string | null) => void; onUnavailable: () => void }
+  callbacks: { onHover: (mesh: AnatomyMesh | null) => void; onSelect: (id: string | null) => void; onUnavailable: () => void; onPlaneChange?: (frame: PlaneFrame) => void }
 ): AnatomyRuntime {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "low-power" });
   const scene = new THREE.Scene();
   let failureControls: OrbitControls | undefined, failureObserver: ResizeObserver | undefined;
   let failureCompass: HTMLCanvasElement | undefined;
   let cancelFailedRender: (() => void) | undefined;
+  let disposeFailedPlaneControl: (() => void) | undefined;
   try {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setClearColor(0x0b1921, 0);
@@ -114,6 +119,105 @@ export function createAnatomyRuntime(
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
   const down = { x: 0, y: 0 };
+  let planeControl: TransformControls | null = null;
+  let planeProxy: THREE.Object3D | null = null;
+  let pendingPlane: PlaneFrame | null = null, planeRaf = 0, suppressSelection = false;
+
+  function syncPlaneProxy(frame: PlaneFrame) {
+    if (!planeProxy || planeControl?.dragging) return;
+    planeProxy.position.fromArray(frame.origin);
+    planeProxy.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(
+      new THREE.Vector3(...frame.right), new THREE.Vector3(...frame.up), new THREE.Vector3(...frame.normal)
+    ));
+    planeProxy.updateMatrixWorld(true);
+  }
+  function flushPlaneChange() {
+    if (planeRaf) cancelAnimationFrame(planeRaf);
+    planeRaf = 0;
+    const frame = pendingPlane; pendingPlane = null;
+    if (frame && !disposed) callbacks.onPlaneChange?.(frame);
+  }
+  function planeObjectChanged() {
+    if (disposed || !planeProxy || !planeControl?.dragging) return;
+    const quaternion = planeProxy.quaternion.clone().normalize();
+    const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(quaternion).normalize();
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(quaternion).normalize();
+    const right = new THREE.Vector3().crossVectors(up, normal).normalize();
+    up.crossVectors(normal, right).normalize();
+    const frame: PlaneFrame = {
+      origin: planeProxy.position.toArray(), normal: normal.toArray(), up: up.toArray(), right: right.toArray()
+    };
+    if (![...frame.origin, ...frame.normal, ...frame.up, ...frame.right].every(Number.isFinite)) return;
+    pendingPlane = frame;
+    // Coalesce pointer events without changing the cut independently of React's
+    // single authoritative frame. Pointer-up flushes the final position.
+    if (!planeRaf) planeRaf = requestAnimationFrame(flushPlaneChange);
+    request();
+  }
+  function planeDraggingChanged() {
+    const dragging = !!planeControl?.dragging;
+    controls.enabled = !dragging;
+    host.dataset.planeDragging = String(dragging);
+    if (dragging) {
+      suppressSelection = true;
+      hovered = null; callbacks.onHover(null); updateHighlight();
+    } else flushPlaneChange();
+  }
+  function planeAxisChanged() {
+    host.dataset.planeAxis = planeControl?.axis ?? "none";
+    if (planeControl?.axis && hovered) {
+      hovered = null; callbacks.onHover(null); updateHighlight();
+    }
+  }
+  function cancelPlaneDrag() {
+    if (planeControl?.dragging) planeControl.pointerUp(null);
+  }
+  function disposePlaneControl() {
+    if (planeRaf) cancelAnimationFrame(planeRaf);
+    planeRaf = 0; pendingPlane = null;
+    if (planeControl) {
+      planeControl.removeEventListener("change", request);
+      planeControl.removeEventListener("objectChange", planeObjectChanged);
+      planeControl.removeEventListener("dragging-changed", planeDraggingChanged);
+      planeControl.removeEventListener("axis-changed", planeAxisChanged);
+      scene.remove(planeControl.getHelper());
+      planeControl.detach(); planeControl.dispose(); planeControl = null;
+    }
+    if (planeProxy) { scene.remove(planeProxy); planeProxy = null; }
+    renderer.domElement.removeEventListener("pointercancel", cancelPlaneDrag);
+    renderer.domElement.removeEventListener("lostpointercapture", cancelPlaneDrag);
+    window.removeEventListener("blur", cancelPlaneDrag);
+    controls.enabled = true; suppressSelection = false;
+    delete host.dataset.planeDragging;
+    delete host.dataset.planeAxis;
+    renderer.domElement.style.touchAction = "none";
+  }
+  disposeFailedPlaneControl = disposePlaneControl;
+  function setPlaneControl(mode: PlaneControlMode) {
+    if (disposed) return;
+    if (!mode || !callbacks.onPlaneChange) { disposePlaneControl(); request(); return; }
+    if (!planeControl) {
+      planeProxy = new THREE.Object3D(); scene.add(planeProxy);
+      planeControl = new TransformControls(camera, renderer.domElement);
+      planeControl.setSpace("world"); planeControl.setSize(0.85);
+      planeControl.attach(planeProxy); scene.add(planeControl.getHelper());
+      planeControl.addEventListener("change", request);
+      planeControl.addEventListener("objectChange", planeObjectChanged);
+      planeControl.addEventListener("dragging-changed", planeDraggingChanged);
+      planeControl.addEventListener("axis-changed", planeAxisChanged);
+      renderer.domElement.addEventListener("pointercancel", cancelPlaneDrag);
+      renderer.domElement.addEventListener("lostpointercapture", cancelPlaneDrag);
+      window.addEventListener("blur", cancelPlaneDrag);
+      // Run the gizmo's pointer-down before OrbitControls so a handle drag never
+      // starts a camera gesture that could survive a lost pointer or window blur.
+      controls.disconnect(); controls.connect(renderer.domElement);
+      planeAxisChanged();
+    }
+    cancelPlaneDrag();
+    planeControl.setMode(mode);
+    if (currentFrame) syncPlaneProxy(currentFrame);
+    request();
+  }
 
   function drawCompass() {
     if (!compassContext) return;
@@ -230,7 +334,7 @@ export function createAnatomyRuntime(
     return null;
   }
   function pointerMove(event: PointerEvent) {
-    if (event.buttons) return;
+    if (event.buttons || planeControl?.dragging || planeControl?.axis) return;
     const item = hit(event);
     if (hovered === (item?.id ?? null)) return;
     hovered = item?.id ?? null; callbacks.onHover(item); updateHighlight();
@@ -238,14 +342,16 @@ export function createAnatomyRuntime(
   function pointerLeave() { hovered = null; callbacks.onHover(null); updateHighlight(); }
   function pointerDown(event: PointerEvent) { down.x = event.clientX; down.y = event.clientY; }
   function pointerUp(event: PointerEvent) {
+    if (suppressSelection || planeControl?.dragging || planeControl?.axis) { suppressSelection = false; return; }
     if (event.button !== 0 || Math.hypot(event.clientX - down.x, event.clientY - down.y) > 4) return;
     callbacks.onSelect(hit(event)?.id ?? null);
   }
+  function doubleClick() { if (!planeControl?.axis && !planeControl?.dragging) resetView(); }
   function contextLost(event: Event) { event.preventDefault(); callbacks.onUnavailable(); }
   const canvas = renderer.domElement;
   canvas.addEventListener("pointermove", pointerMove); canvas.addEventListener("pointerleave", pointerLeave);
   canvas.addEventListener("pointerdown", pointerDown); canvas.addEventListener("pointerup", pointerUp);
-  canvas.addEventListener("dblclick", resetView); canvas.addEventListener("webglcontextlost", contextLost);
+  canvas.addEventListener("dblclick", doubleClick); canvas.addEventListener("webglcontextlost", contextLost);
   resetView(); resize();
 
   return {
@@ -264,6 +370,7 @@ export function createAnatomyRuntime(
       if (disposed) return;
       const frame = getPlaneFrame(plane);
       currentFrame = frame; currentOptions = options; selected = selectedId ?? null;
+      syncPlaneProxy(frame);
       const side = options.positive && options.negative ? 0 : options.positive ? 1 : -1;
       clip.normal.fromArray(frame.normal).multiplyScalar(side || 1);
       clip.constant = -clip.normal.dot(new THREE.Vector3(...frame.origin));
@@ -288,15 +395,16 @@ export function createAnatomyRuntime(
       capTexture.needsUpdate = true;
       updateHighlight();
     },
-    resetView, alignView, flipView, zoomBy,
+    setPlaneControl, resetView, alignView, flipView, zoomBy,
     dispose() {
       if (disposed) return;
       disposed = true;
       if (raf) cancelAnimationFrame(raf);
+      disposePlaneControl();
       resizeObserver.disconnect(); controls.removeEventListener("change", request); controls.dispose();
       canvas.removeEventListener("pointermove", pointerMove); canvas.removeEventListener("pointerleave", pointerLeave);
       canvas.removeEventListener("pointerdown", pointerDown); canvas.removeEventListener("pointerup", pointerUp);
-      canvas.removeEventListener("dblclick", resetView); canvas.removeEventListener("webglcontextlost", contextLost);
+      canvas.removeEventListener("dblclick", doubleClick); canvas.removeEventListener("webglcontextlost", contextLost);
       for (const body of bodies) { body.geometry.dispose(); body.material.dispose(); }
       capTexture.dispose(); planeGeometry.dispose(); capMaterial.dispose(); sheetMaterial.dispose();
       edgeGeometry.dispose(); edgeMaterial.dispose(); renderer.dispose(); renderer.forceContextLoss();
@@ -305,6 +413,7 @@ export function createAnatomyRuntime(
   };
   } catch (error) {
     cancelFailedRender?.();
+    disposeFailedPlaneControl?.();
     failureControls?.dispose(); failureObserver?.disconnect(); failureCompass?.remove();
     scene.traverse(object => {
       if (!(object instanceof THREE.Mesh || object instanceof THREE.Line)) return;

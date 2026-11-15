@@ -528,6 +528,10 @@ export class GlassRuntime {
     }
   }
 
+  setAccessibleLabel(label: string): void {
+    this.canvas.setAttribute("aria-label", label);
+  }
+
   setCallbacks(callbacks: RuntimeCallbacks): void {
     this.callbacks = callbacks;
   }

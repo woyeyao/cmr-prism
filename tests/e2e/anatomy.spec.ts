@@ -1,47 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { createSyntheticStudyUploads } from "./syntheticDicom";
 
-type ResourceCounts = Record<string, number>;
-
-/** Count real browser allocations, including resources reclaimed on context loss. */
-async function trackGraphicsResources(page: Page) {
-  await page.addInitScript(() => {
-    const live: Record<string, number> = { buffers: 0, textures: 0, programs: 0, framebuffers: 0, renderbuffers: 0, vertexArrays: 0 };
-    (window as unknown as { anatomyResources: Record<string, number> }).anatomyResources = live;
-    const contexts = new WeakMap<WebGL2RenderingContext, Map<object, string>>();
-    for (const [create, remove, key] of [
-      ["createBuffer", "deleteBuffer", "buffers"], ["createTexture", "deleteTexture", "textures"],
-      ["createProgram", "deleteProgram", "programs"], ["createFramebuffer", "deleteFramebuffer", "framebuffers"],
-      ["createRenderbuffer", "deleteRenderbuffer", "renderbuffers"], ["createVertexArray", "deleteVertexArray", "vertexArrays"],
-    ]) {
-      const prototype = WebGL2RenderingContext.prototype as unknown as Record<string, (...args: unknown[]) => unknown>;
-      const allocate = prototype[create], release = prototype[remove];
-      prototype[create] = function (this: WebGL2RenderingContext, ...args: unknown[]) {
-        const object = allocate.apply(this, args) as object | null;
-        if (!contexts.has(this)) {
-          const resources = new Map<object, string>();
-          contexts.set(this, resources);
-          this.canvas.addEventListener("webglcontextlost", () => {
-            for (const kind of resources.values()) live[kind]--;
-            resources.clear();
-          });
-        }
-        if (object) { contexts.get(this)!.set(object, key); live[key]++; }
-        return object;
-      };
-      prototype[remove] = function (this: WebGL2RenderingContext, object: unknown) {
-        if (object && contexts.get(this)?.delete(object as object)) live[key]--;
-        return release.call(this, object);
-      };
-    }
-  });
-}
-
-const resources = (page: Page) => page.evaluate(() =>
-  ({ ...(window as unknown as { anatomyResources: ResourceCounts }).anatomyResources }),
-);
-
-const zeroResources = { buffers: 0, textures: 0, programs: 0, framebuffers: 0, renderbuffers: 0, vertexArrays: 0 };
+import { trackGraphicsResources, graphicsResources as resources, zeroGraphicsResources as zeroResources } from "./graphicsResources";
 
 async function openAnatomy(page: Page) {
   await page.getByTestId("mode-anatomy").click();
@@ -421,6 +381,16 @@ test("local CMR comparison has its own cursor and preserves the original viewer"
     await expect(local).toContainText("未进行同人空间配准或心动相位同步");
 
     const localNode = await local.elementHandle();
+    const localCanvas = await local.getByTestId("image-viewport").elementHandle();
+    await page.getByTestId("language-switch").click();
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    await expect(local.getByLabel("Local comparison series", { exact: true })).toHaveValue(fourChamber.id);
+    await expect(local.getByLabel("Local time frame", { exact: true })).toHaveValue("1");
+    await expect(local.getByLabel("Local window width", { exact: true })).toHaveValue("520");
+    expect(await local.evaluate((element, previous) => element === previous, localNode)).toBe(true);
+    expect(await local.getByTestId("image-viewport").evaluate((element, previous) => element === previous, localCanvas)).toBe(true);
+    await page.getByTestId("language-switch").click();
+    await expect(local.getByLabel("本机时间帧", { exact: true })).toHaveValue("1");
     await page.getByRole("button", { name: "放大 CMR 对照", exact: true }).click();
     const cmrDialog = page.getByRole("dialog", { name: "放大 CMR 对照", exact: true });
     await expect(cmrDialog.getByTestId("local-comparison")).toBeVisible();

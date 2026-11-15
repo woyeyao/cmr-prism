@@ -12,6 +12,16 @@
 
 本机发布分支为 `github-public`，对应GitHub的 `main`；匿名标签 `public/v0.1.0` 对应远端 `v0.1.0`。本项目的默认推送配置只推送发布分支，并关闭自动跟随标签。公开版本的后续提交仍使用项目匿名身份。GitHub新克隆得到的是公开 `main` 及公开稳定标签，均不含原本机历史。
 
+## GitHub Pages
+
+在线地址：[woyeyao.github.io/cmr-prism](https://woyeyao.github.io/cmr-prism/)。仓库 Pages Source 使用 **GitHub Actions**，由 `.github/workflows/pages.yml` 在 `main` 更新后发布。
+
+工作流先执行类型、单元、主动脉源与发布审计，再构建独立静态课堂、验证产物并上传 `artifacts/pages`。仅部署解剖课堂与公开资产；本机 DICOM 页面、上传入口、API、真实影像、脚本及服务端源码不进入站点。`build-info.json` 记录版本与部署 commit，便于线上核对。Actions 固定版本 SHA，构建仅有读取权限，部署 job 才有 Pages 写入和 OIDC 权限；产物保留1天。
+
+静态构建命令为 `npm run build:pages` 和 `npm run verify:pages`。默认 basePath 为 `/cmr-prism`，发布 workflow 使用 configure-pages 返回的路径。正常本机版继续使用 `npm run build` / `npm start`。静态构建占用 `.next` 中间目录，先停服务；恢复本机版前重新普通构建。
+
+字体在静态包中只保留一组经哈希核验的副本及完整许可证；公开模型仍使用已有精确资产清单。审计仅特别允许本工作流文件，未开放任意 YAML 或数据文件。首次设置与权限依据：[GitHub 自定义 Pages 工作流](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)。
+
 ## 后续检查
 
 先检查 `git status` 与暂存清单，只添加需要的源码和文档；不要使用包含未知文件的批量上传。普通测试使用合成影像；真实影像检查产生的输出留在已忽略的本机目录。

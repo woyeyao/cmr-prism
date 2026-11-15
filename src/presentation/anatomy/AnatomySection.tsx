@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AnatomyModel, AnatomySection as Section, Vec2, Vec3 } from "@/core/anatomy/types";
 import { planeIntersection } from "@/core/anatomy/geometry";
+import { useI18n } from "@/i18n";
 import { DEFAULT_ANATOMY_OPTIONS, directionLabel, drawSections, enabledSection, getPlaneFrame, getSections, labelPriority, sectionDrawings, sectionExtent, sectionViewport, shortLabel, type AnatomyRenderOptions, type RenderPlane } from "./rendering";
 import "./anatomy-rendering.css";
 
@@ -37,6 +38,7 @@ function nearPath(point: Vec2, paths: Vec2[][], tolerance: number): boolean {
 }
 
 export default function AnatomySection({ model, plane, options = DEFAULT_ANATOMY_OPTIONS, selectedId, onSelect, referencePlane, className }: AnatomySectionProps) {
+  const { t } = useI18n();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fitRef = useRef({ factor: 1, width: 1, height: 1, dpr: 1, centerX: 0, centerY: 0 });
   const [hovered, setHovered] = useState<Section | null>(null);
@@ -82,7 +84,7 @@ export default function AnatomySection({ model, plane, options = DEFAULT_ANATOMY
           && (section.group !== "wall" || model.id === "hra"));
         const used = new Set<string>();
         const labels = tagCandidates.sort((a, b) => labelPriority(a, plane) - labelPriority(b, plane)).flatMap(section => {
-          const name = shortLabel(section);
+          const name = shortLabel({ ...section, label: t(section.label) });
           if (used.has(name)) return [];
           used.add(name);
           const paths = section.loops.length ? section.loops : section.paths;
@@ -123,7 +125,7 @@ export default function AnatomySection({ model, plane, options = DEFAULT_ANATOMY
     const request = () => { if (!raf) raf = requestAnimationFrame(render); };
     const observer = new ResizeObserver(request); observer.observe(canvas); request();
     return () => { observer.disconnect(); if (raf) cancelAnimationFrame(raf); };
-  }, [drawings, model, options, plane, referencePlane, sections, selectedId, hovered]);
+  }, [drawings, model, options, plane, referencePlane, sections, selectedId, hovered, t]);
 
   function findAt(clientX: number, clientY: number): Section | null {
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -139,11 +141,11 @@ export default function AnatomySection({ model, plane, options = DEFAULT_ANATOMY
     return null;
   }
 
-  return <div className={`anatomy-section ${className ?? ""}`} data-testid="anatomy-section" role="img" aria-label="当前切面的二维解剖断面，组织填色保留心腔">
+  return <div className={`anatomy-section ${className ?? ""}`} data-testid="anatomy-section" role="img" aria-label={t("当前切面的二维解剖断面，组织填色保留心腔")}>
     <canvas ref={canvasRef} onPointerMove={event => setHovered(findAt(event.clientX, event.clientY))}
       onPointerLeave={() => setHovered(null)} onClick={event => onSelect?.(findAt(event.clientX, event.clientY)?.id ?? null)} />
-    {hovered && <div className="anatomy-section__hover">{hovered.label}</div>}
-    {!hasTissue && <div className="anatomy-section__label">当前平面未与可见结构相交</div>}
-    {model.space.axes === "specimen" && !hovered && <div className="anatomy-section__label">标本坐标 · {hasOpenWalls ? "开放边界仅显示轮廓" : "未映射患者方位"}</div>}
+    {hovered && <div className="anatomy-section__hover">{t(hovered.label)}</div>}
+    {!hasTissue && <div className="anatomy-section__label">{t("当前平面未与可见结构相交")}</div>}
+    {model.space.axes === "specimen" && !hovered && <div className="anatomy-section__label">{t("标本坐标")} · {t(hasOpenWalls ? "开放边界仅显示轮廓" : "未映射患者方位")}</div>}
   </div>;
 }

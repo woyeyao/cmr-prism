@@ -1,4 +1,4 @@
-import { importStudy, StudySourceError } from "@/server/studySource";
+import { disposeStudy, importStudy, StudySourceError } from "@/server/studySource";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,10 +25,17 @@ export async function POST(request: Request): Promise<Response> {
     });
   }
   try {
+    request.signal.throwIfAborted();
     const form = await request.formData();
+    request.signal.throwIfAborted();
     const files = form.getAll("files").filter((entry): entry is File => typeof entry === "object" && entry !== null && "arrayBuffer" in entry && "stream" in entry) as File[];
-    return Response.json(await importStudy(files), { status: 201, headers: { "Cache-Control": "no-store" } });
+    const catalog = await importStudy(files, request.signal);
+    if (request.signal.aborted) {
+      await disposeStudy(catalog.id);
+      request.signal.throwIfAborted();
+    }
+    return Response.json(catalog, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    return apiError(error);
+    return apiError(request.signal.aborted ? new StudySourceError(499, "IMPORT_CANCELLED", "已取消影像导入。") : error);
   }
 }

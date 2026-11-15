@@ -81,6 +81,12 @@ test("imports synthetic CMR and completes atlas, inspection, linked split, and c
   const reportRows = await report.locator(".report-stats > div").allTextContents();
   expect(reportRows).toEqual(["影像实例15", "可浏览帧15", "跳过非影像1", "无法读取1"]);
   await report.getByRole("button", { name: "继续浏览" }).click();
+  await page.getByTestId("language-switch").click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.getByRole("button", { name: "Import report · 15 frames ↗", exact: true })).toBeVisible();
+  await expect(page.locator(".series-dimensions").first()).toContainText("2 slices");
+  await page.getByTestId("language-switch").click();
+  await expect(page.getByRole("button", { name: "导入报告 · 15 帧 ↗", exact: true })).toBeVisible();
 
   // A double click on a physical layer opens the large 2D frame view.
   await page.locator(".atlas-layer-strip button").first().dblclick();

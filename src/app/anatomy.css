@@ -134,17 +134,17 @@
 .anatomy-view-note { display: flex; gap: 10px; align-items: flex-start; padding: 14px 2px 0; flex: 0 0 auto; color: var(--anatomy-muted); font-size: 10px; }
 .anatomy-view-note > span { color: var(--anatomy-accent); }
 .anatomy-view-note p { margin: 0; line-height: 1.8; }
-.anatomy-inspector { min-width: 0; min-height: 0; overflow-y: auto; scrollbar-width: thin; padding: 17px 14px 22px 6px; }
+.anatomy-inspector { min-width: 0; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-gutter: stable; padding: 17px 14px 22px 6px; }
 .anatomy-reference-panel > header { padding: 13px 12px 11px; }
 .anatomy-source-switch { display: flex; gap: 3px; }
 .anatomy-source-switch button { font-size: 8px; border-radius: 3px; color: var(--anatomy-muted); padding: 5px 6px; white-space: nowrap; }
 .anatomy-source-switch button[aria-pressed=true] { color: var(--anatomy-accent); background: var(--anatomy-soft); }
-.anatomy-reference-slot { height: var(--reference-height); min-height: 260px; }
-.anatomy-reference-panel { display: flex; flex-direction: column; height: 100%; }
+.anatomy-reference-slot { min-height: 260px; }
+.anatomy-reference-panel { display: flex; flex-direction: column; min-height: 260px; }
 .anatomy-reference-panel > header { flex: 0 0 auto; }
 .anatomy-reference-toolbar { padding: 0 10px 8px; flex: 0 0 auto; }
-.anatomy-reference-content { flex: 1; min-height: 0; overflow: auto; scrollbar-width: thin; }
-.anatomy-reference-content > .anatomy-cine { height: 100%; min-height: 210px; }
+.anatomy-reference-content { flex: 0 0 auto; min-height: 0; }
+.anatomy-reference-content > .anatomy-cine { min-height: 210px; }
 .anatomy-reference-content .anatomy-cine-image { min-height: 90px; }
 .anatomy-reference-content .anatomy-cine-controls { gap: 7px; padding: 8px 10px; }
 .anatomy-reference-content .anatomy-cine-meta { padding-top: 7px; font-size: 9px; }
@@ -154,7 +154,9 @@
 .anatomy-reference-panel.is-expanded > header { padding: 16px 20px 8px; }
 .anatomy-reference-panel.is-expanded h3 { font-size: 18px; }
 .anatomy-reference-panel.is-expanded .anatomy-reference-toolbar { padding: 0 16px 10px; }
-.anatomy-reference-panel.is-expanded .anatomy-cine-image { min-height: 200px; }
+.anatomy-reference-panel.is-expanded .anatomy-reference-content { flex: 1; overflow: auto; scrollbar-width: thin; }
+.anatomy-reference-panel.is-expanded .anatomy-cine { height: 100%; }
+.anatomy-reference-panel.is-expanded .anatomy-cine-image { flex: 1; height: auto; min-height: 200px; }
 .anatomy-reference-panel.is-expanded .anatomy-cine-meta, .anatomy-reference-panel.is-expanded .anatomy-cine-provenance { font-size: 11px; }
 .anatomy-reference-panel.is-expanded .anatomy-cine-controls { padding: 12px 18px; }
 .anatomy-reference-note { font-size: 9px; line-height: 1.8; margin: 0; color: var(--anatomy-muted); padding: 10px 12px; border-top: 1px solid var(--anatomy-line); }

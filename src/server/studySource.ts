@@ -38,6 +38,10 @@ export class StudySourceError extends Error {
   }
 }
 
+function assertImportActive(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new StudySourceError(499, "IMPORT_CANCELLED", "已取消影像导入。");
+}
+
 type DicomDataset = Record<string, unknown>;
 type ParsedFrame = {
   descriptor: FrameDescriptor;
@@ -166,15 +170,23 @@ function normalizeArrayBuffer(input: Uint8Array): ArrayBuffer {
 async function mapOrderedBounded<T, R>(items: readonly T[], concurrency: number, work: (item: T, index: number) => Promise<R>): Promise<R[]> {
   const results = new Array<R>(items.length);
   let nextIndex = 0;
+  let stopped = false;
   const workerCount = Math.min(Math.max(1, Math.trunc(concurrency)), items.length);
-  await Promise.all(Array.from({ length: workerCount }, async () => {
-    for (;;) {
-      const index = nextIndex;
-      nextIndex += 1;
-      if (index >= items.length) return;
-      results[index] = await work(items[index], index);
+  const settled = await Promise.allSettled(Array.from({ length: workerCount }, async () => {
+    try {
+      while (!stopped) {
+        const index = nextIndex++;
+        if (index >= items.length) return;
+        results[index] = await work(items[index], index);
+      }
+    } catch (error) {
+      stopped = true;
+      throw error;
     }
   }));
+  // Do not remove session files while another worker still owns an open read.
+  const failed = settled.find((result) => result.status === "rejected");
+  if (failed?.status === "rejected") throw failed.reason;
   return results;
 }
 
@@ -365,8 +377,10 @@ function validatePixelData(dataset: DicomDataset, parsed: ParsedFrame[], bytes: 
   if (!Number.isSafeInteger(expectedBytes) || expectedBytes <= 0 || !bytes || bytes.byteLength < expectedBytes) throw new Error("missing or incomplete pixel data");
 }
 
-async function parseInstance(filePath: string): Promise<ParsedInstance | null> {
-  const input = new Uint8Array(await readFile(filePath));
+async function parseInstance(filePath: string, signal?: AbortSignal): Promise<ParsedInstance | null> {
+  assertImportActive(signal);
+  const input = new Uint8Array(await readFile(filePath, { signal }));
+  assertImportActive(signal);
   const dataset = naturalize(input);
   if (!isMrImage(dataset)) return null;
   const rows = number(dataset.Rows) ?? 0;
@@ -403,6 +417,7 @@ async function parseInstance(filePath: string): Promise<ParsedInstance | null> {
     validatePixelData(dataset, parsed, bytes);
   } else {
     const decoded = await decodeItkFrame(filePath, parsed[0].descriptor);
+    assertImportActive(signal);
     if (decoded.length !== rows * columns) throw new Error("ITK-Wasm decoded an unexpected pixel count");
   }
   return { instanceId, path: filePath, frames: parsed };
@@ -572,7 +587,8 @@ function isValidWindow(window: WindowLevel | undefined): window is WindowLevel {
   return Boolean(window && Number.isFinite(window.center) && Number.isFinite(window.width) && window.width > 0);
 }
 
-async function finalizeCatalog(session: StudySession, instances: ParsedInstance[], warnings: string[]): Promise<StudyCatalog> {
+async function finalizeCatalog(session: StudySession, instances: ParsedInstance[], warnings: string[], signal?: AbortSignal): Promise<StudyCatalog> {
+  assertImportActive(signal);
   const frames: Record<string, FrameDescriptor> = {};
   const parsedFrames = new Map<string, ParsedFrame>();
   const instanceMap = new Map<string, ParsedInstance>();
@@ -619,9 +635,11 @@ async function finalizeCatalog(session: StudySession, instances: ParsedInstance[
   session.frames = parsedFrames;
   session.instances = instanceMap;
   session.catalog = catalog;
+  assertImportActive(signal);
   sessions.set(session.id, session);
 
   for (const collection of collections) {
+    assertImportActive(signal);
     const availableFrames = collection.planes.flatMap((plane) => plane.frameIds).filter((id): id is string => id !== null);
     const tagged = availableFrames.map((id) => frames[id]?.window).find(isValidWindow);
     if (tagged) {
@@ -635,16 +653,20 @@ async function finalizeCatalog(session: StudySession, instances: ParsedInstance[
     }
     try {
       const pixels = await readScalarFrame(session.id, firstId);
+      assertImportActive(signal);
       collection.defaultWindow = deriveWindow(pixels);
     } catch {
+      assertImportActive(signal);
       collection.defaultWindow = { center: 0, width: 1 };
       warnings.push("部分序列无法推导默认窗宽窗位，请在查看时手动调整。");
     }
   }
+  assertImportActive(signal);
   return catalog;
 }
 
-async function withNewSession<T>(work: (session: StudySession) => Promise<T>): Promise<T> {
+async function withNewSession<T>(work: (session: StudySession) => Promise<T>, signal?: AbortSignal): Promise<T> {
+  assertImportActive(signal);
   const root = await mkdtemp(/* turbopackIgnore: true */ join(tmpdir(), "cmr-prism-"));
   const id = randomUUID();
   const placeholder: StudyCatalog = {
@@ -664,11 +686,17 @@ async function withNewSession<T>(work: (session: StudySession) => Promise<T>): P
     inFlight: new Map()
   };
   try {
-    return await work(session);
+    assertImportActive(signal);
+    const result = await work(session);
+    assertImportActive(signal);
+    return result;
   } catch (error) {
     session.disposed = true;
+    sessions.delete(session.id);
     removeCachedStudy(session.id);
+    await Promise.allSettled(session.inFlight.values());
     await rm(root, { recursive: true, force: true });
+    assertImportActive(signal);
     throw error;
   }
 }
@@ -682,16 +710,30 @@ function zipOpen(filePath: string): Promise<yauzl.ZipFile> {
   });
 }
 
-function zipReadEntry(zip: yauzl.ZipFile): Promise<yauzl.Entry | null> {
+function zipReadEntry(zip: yauzl.ZipFile, signal?: AbortSignal): Promise<yauzl.Entry | null> {
   return new Promise((resolve, reject) => {
     const onEntry = (entry: yauzl.Entry) => { cleanup(); resolve(entry); };
     const onEnd = () => { cleanup(); resolve(null); };
     const onError = (error: Error) => { cleanup(); reject(error); };
-    const cleanup = () => { zip.removeListener("entry", onEntry); zip.removeListener("end", onEnd); zip.removeListener("error", onError); };
+    const onAbort = () => { cleanup(); reject(new StudySourceError(499, "IMPORT_CANCELLED", "已取消影像导入。")); };
+    const cleanup = () => { zip.removeListener("entry", onEntry); zip.removeListener("end", onEnd); zip.removeListener("error", onError); signal?.removeEventListener("abort", onAbort); };
     zip.once("entry", onEntry);
     zip.once("end", onEnd);
     zip.once("error", onError);
+    signal?.addEventListener("abort", onAbort, { once: true });
+    if (signal?.aborted) { onAbort(); return; }
     zip.readEntry();
+  });
+}
+
+function closeZip(zip: yauzl.ZipFile): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const cleanup = () => { zip.removeListener("close", closed); zip.removeListener("error", failed); };
+    const closed = () => { cleanup(); resolve(); };
+    const failed = (error: Error) => { cleanup(); reject(error); };
+    zip.once("close", closed);
+    zip.once("error", failed);
+    zip.close();
   });
 }
 
@@ -710,7 +752,8 @@ function isSafeZipEntry(entry: yauzl.Entry): boolean {
     && !name.includes("\0") && type !== 0o120000;
 }
 
-async function unpackZip(filePath: string, destination: string, budget: { bytes: number; entries: number }): Promise<SourceFile[]> {
+async function unpackZip(filePath: string, destination: string, budget: { bytes: number; entries: number }, signal?: AbortSignal): Promise<SourceFile[]> {
+  assertImportActive(signal);
   let zip: yauzl.ZipFile;
   try {
     zip = await zipOpen(filePath);
@@ -723,7 +766,8 @@ async function unpackZip(filePath: string, destination: string, budget: { bytes:
   let settled = false;
   try {
     for (;;) {
-      const entry = await zipReadEntry(zip);
+      assertImportActive(signal);
+      const entry = await zipReadEntry(zip, signal);
       if (!entry) break;
       budget.entries += 1;
       if (budget.entries > 20_000) throw new StudySourceError(413, "TOO_MANY_FILES", "单次导入文件数量超过限制。");
@@ -746,24 +790,27 @@ async function unpackZip(filePath: string, destination: string, budget: { bytes:
           callback(null, chunk);
         }
       });
-      await pipeline(input, limiter, createWriteStream(output, { flags: "wx" }));
+      await pipeline(input, limiter, createWriteStream(output, { flags: "wx" }), { signal });
       budget.bytes += actual;
       files.push({ path: output });
     }
     settled = true;
   } catch (error) {
+    assertImportActive(signal);
     if (error instanceof StudySourceError) throw error;
     const reason = error instanceof Error ? error.message.toLowerCase() : "";
     const code = reason.includes("path") || reason.includes("filename") || reason.includes("absolute") ? "UNSAFE_ARCHIVE" : "INVALID_ARCHIVE";
     throw new StudySourceError(400, code, "ZIP 无法读取或包含不安全路径，已拒绝该压缩包。");
   } finally {
-    zip.close();
+    // Wait for the archive fd as well as its entry streams before session cleanup.
+    await closeZip(zip);
     if (!settled) await Promise.all(files.map(({ path }) => rm(path, { force: true })));
   }
   return files;
 }
 
-async function copyWebFile(file: InputFile, output: string, seenBytes: { value: number }): Promise<void> {
+async function copyWebFile(file: InputFile, output: string, seenBytes: { value: number }, signal?: AbortSignal): Promise<void> {
+  assertImportActive(signal);
   if (!Number.isFinite(file.size) || file.size < 0 || seenBytes.value + file.size > MAX_IMPORT_BYTES) {
     throw new StudySourceError(413, "IMPORT_TOO_LARGE", "导入文件总量超过 1 GiB 限制。");
   }
@@ -780,7 +827,7 @@ async function copyWebFile(file: InputFile, output: string, seenBytes: { value: 
       callback(null, chunk);
     }
   });
-  await pipeline(input, limiter, createWriteStream(output, { flags: "wx" }));
+  await pipeline(input, limiter, createWriteStream(output, { flags: "wx" }), { signal });
   seenBytes.value += actual;
 }
 
@@ -795,7 +842,8 @@ async function looksLikeZip(filePath: string): Promise<boolean> {
   }
 }
 
-async function importPathsIntoSession(session: StudySession, sourcePaths: string[]): Promise<StudyCatalog> {
+async function importPathsIntoSession(session: StudySession, sourcePaths: string[], signal?: AbortSignal): Promise<StudyCatalog> {
+  assertImportActive(signal);
   const warnings: string[] = [];
   const parsedInstances: ParsedInstance[] = [];
   const failures: SourceFile[] = [];
@@ -805,21 +853,27 @@ async function importPathsIntoSession(session: StudySession, sourcePaths: string
   const candidates: SourceFile[] = [];
 
   const inspected = await mapOrderedBounded(sourcePaths, IMPORT_WORKERS, async (path) => {
+    assertImportActive(signal);
     try {
-      return { path, isZip: await looksLikeZip(path), failed: false };
+      const isZip = await looksLikeZip(path);
+      assertImportActive(signal);
+      return { path, isZip, failed: false };
     } catch {
+      assertImportActive(signal);
       return { path, isZip: false, failed: true };
     }
   });
   for (const source of inspected) {
+    assertImportActive(signal);
     if (source.failed) {
       failures.push({ path: source.path });
       continue;
     }
     if (source.isZip) {
       try {
-        candidates.push(...await unpackZip(source.path, session.root, budget));
+        candidates.push(...await unpackZip(source.path, session.root, budget, signal));
       } catch (error) {
+        assertImportActive(signal);
         if (error instanceof StudySourceError && error.status >= 413) throw error;
         if (!firstArchiveError) {
           firstArchiveError = error instanceof StudySourceError
@@ -834,9 +888,13 @@ async function importPathsIntoSession(session: StudySession, sourcePaths: string
   }
 
   const parseResults = await mapOrderedBounded(candidates, IMPORT_WORKERS, async (candidate) => {
+    assertImportActive(signal);
     try {
-      return { candidate, instance: await parseInstance(candidate.path), failed: false };
+      const instance = await parseInstance(candidate.path, signal);
+      assertImportActive(signal);
+      return { candidate, instance, failed: false };
     } catch {
+      assertImportActive(signal);
       return { candidate, instance: null, failed: true };
     }
   });
@@ -851,14 +909,15 @@ async function importPathsIntoSession(session: StudySession, sourcePaths: string
   }
   if (skippedObjects > 0) warnings.push(`${skippedObjects} 个非 MR 影像对象已跳过。`);
   if (failures.length > 0) warnings.push(`${failures.length} 个文件损坏或使用了当前不支持的编码，未影响其他可读影像。`);
-  await finalizeCatalog(session, parsedInstances, warnings);
+  await finalizeCatalog(session, parsedInstances, warnings, signal);
   session.catalog.report.skippedObjects = skippedObjects;
   session.catalog.report.failedFiles = failures.length;
   return session.catalog;
 }
 
 /** Import an upload into a private temporary session. File names never become ids or response fields. */
-export async function importStudy(files: File[]): Promise<StudyCatalog> {
+export async function importStudy(files: File[], signal?: AbortSignal): Promise<StudyCatalog> {
+  assertImportActive(signal);
   if (!Array.isArray(files) || files.length === 0) throw new StudySourceError(400, "EMPTY_UPLOAD", "请至少选择一个 DICOM 文件或 ZIP 压缩包。");
   if (files.length > 20_000) throw new StudySourceError(413, "TOO_MANY_FILES", "单次导入文件数量超过限制。");
   const uploadBytes = files.reduce((sum, file) => sum + (Number.isFinite(file.size) ? file.size : 0), 0);
@@ -869,11 +928,11 @@ export async function importStudy(files: File[]): Promise<StudyCatalog> {
     const counted = { value: 0 };
     for (const file of files) {
       const path = join(session.root, `upload-${randomUUID()}${extname(file.name).slice(0, 12)}`);
-      await copyWebFile(file, path, counted);
+      await copyWebFile(file, path, counted, signal);
       sources.push(path);
     }
-    return importPathsIntoSession(session, sources);
-  });
+    return importPathsIntoSession(session, sources, signal);
+  }, signal);
 }
 
 /** Internal local audit hook. It is used by scripts and is not exposed through an API route. */

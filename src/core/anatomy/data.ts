@@ -1,5 +1,6 @@
 import { add, cross, dot, normalize, planeFrame, scale, subtract } from "./geometry";
 import { alignHraToLps } from "./hraCoordinates";
+import { publicAsset } from "../publicAsset";
 import type { AnatomyCineCatalog, AnatomyMesh, AnatomyModel, AnatomyModelId, AnatomyPlane, AnatomyView, AnatomyViewId, Vec3 } from "./types";
 
 export const ANATOMY_MODELS = [
@@ -177,7 +178,7 @@ export async function loadAnatomyModel(id: AnatomyModelId, signal?: AbortSignal)
   if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
   const cached = modelCache.get(id);
   if (cached) return cached;
-  const response = await fetch(`/anatomy/${id}.json`, { signal });
+  const response = await fetch(publicAsset(`/anatomy/${id}.json`), { signal });
   if (!response.ok) throw new Error("解剖模型加载失败，请重试");
   const model = prepareAnatomyModel(await response.json(), id);
   modelCache.set(id, model);
@@ -187,12 +188,12 @@ export async function loadAnatomyModel(id: AnatomyModelId, signal?: AbortSignal)
 export async function loadAnatomyCines(signal?: AbortSignal): Promise<AnatomyCineCatalog> {
   if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
   if (cineCache) return cineCache;
-  const response = await fetch("/anatomy/cine.json", { signal });
+  const response = await fetch(publicAsset("/anatomy/cine.json"), { signal });
   if (!response.ok) throw new Error("参考影像加载失败，请重试");
   const value = await response.json() as AnatomyCineCatalog;
   for (const cine of Object.values(value)) {
     if (!cine || !Array.isArray(cine.frames) || !cine.frames.length || cine.frames.length !== cine.triggerTimesMs.length || !cine.frames.every(path => /^\/anatomy\/cine\/[a-f0-9]+\.(jpg|png|webp)$/.test(path))) throw new Error("参考影像目录格式不正确");
   }
-  cineCache = value;
-  return value;
+  cineCache = Object.fromEntries(Object.entries(value).map(([id, cine]) => [id, { ...cine, frames: cine.frames.map(publicAsset) }]));
+  return cineCache;
 }

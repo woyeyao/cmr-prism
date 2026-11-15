@@ -1,0 +1,16 @@
+export const layoutMessages: Record<string, string> = {
+  "调整目录宽度": "Resize course navigation",
+  "调整 CMR 面板宽度": "Resize CMR panel width",
+  "调整三维面板高度": "Resize 3D panel height",
+  "调整断面与定位图比例": "Resize section and locator proportions",
+  "调整 CMR 面板高度": "Resize CMR panel height",
+  "等比高度 {offset} 像素": "Proportional height {offset} pixels",
+  "像素": "pixels",
+  "拖动或方向键调整，双击还原": "Drag or use arrow keys; double-click to reset",
+  "放大 CMR 对照": "Enlarge CMR comparison",
+  "真实 CMR 对照": "CMR comparison",
+  "关闭 CMR 放大": "Close enlarged CMR",
+  "收起": "Collapse",
+  "放大": "Enlarge",
+  "静态图谱与 MR 并排比较解剖关系；两者未做空间配准。": "Compare the static atlas and MR side by side; they are not spatially registered.",
+};

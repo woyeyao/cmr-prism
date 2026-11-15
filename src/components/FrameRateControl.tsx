@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useI18n } from "@/i18n";
 
 export default function FrameRateControl({ value, onChange }: { value: number; onChange: (fps: number) => void }) {
+  const { t } = useI18n();
   const [draft, setDraft] = useState(String(value));
   useEffect(() => setDraft(String(value)), [value]);
   const commit = () => {
@@ -11,8 +13,8 @@ export default function FrameRateControl({ value, onChange }: { value: number; o
     setDraft(String(next));
     onChange(next);
   };
-  return <label className="fps-control" title="输入1–60 fps；实际播放速度取决于加载与绘制速度">
-    <input type="number" min={1} max={60} step={1} aria-label="播放帧率" value={draft} onChange={(event) => {
+  return <label className="fps-control" title={t("输入1–60 fps；实际播放速度取决于加载与绘制速度")}>
+    <input type="number" min={1} max={60} step={1} aria-label={t("播放帧率")} value={draft} onChange={(event) => {
       const text = event.target.value;
       setDraft(text);
       const next = Number(text);

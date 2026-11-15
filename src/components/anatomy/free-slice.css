@@ -1,0 +1,43 @@
+.free-slice-layout { display: grid; grid-template-columns: minmax(0, 1fr) 312px; flex: 1; min-height: 0; }
+.free-slice-main { padding: 14px; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.free-slice-toolbar { display: flex; align-items: center; gap: 5px; padding-bottom: 12px; flex-wrap: wrap; }
+.free-slice-toolbar button { display: inline-flex; align-items: center; gap: 12px; border: 1px solid var(--anatomy-line); border-radius: 5px; padding: 8px 12px; font-size: 12px; background: var(--anatomy-panel); }
+.free-slice-toolbar button[aria-pressed=true] { color: var(--anatomy-accent); border-color: var(--anatomy-accent); background: var(--anatomy-soft); }
+.free-slice-toolbar button:disabled { opacity: .45; }
+.free-slice-toolbar kbd { font: 10px ui-monospace, monospace; color: var(--anatomy-muted); }
+.free-slice-custom-tag { font-size: 10px; color: var(--anatomy-muted); margin-left: auto; padding: 0 5px; }
+.free-slice-stage { flex: 1; position: relative; min-height: 340px; border-radius: 9px; border: 1px solid var(--anatomy-line); overflow: hidden; }
+.free-slice-stage .anatomy-stage { min-height: 0; }
+.free-slice-controls { background: var(--anatomy-panel); border-left: 1px solid var(--anatomy-line); padding: 18px 18px 24px; overflow-y: auto; scrollbar-width: thin; min-width: 0; }
+.free-slice-controls fieldset { padding: 0 0 17px; margin: 0 0 16px; border-bottom: 1px solid var(--anatomy-line); }
+.free-slice-controls legend { font-size: 13px; font-weight: 550; padding: 0; margin-bottom: 10px; }
+.free-slice-note { margin: 8px 0 11px; color: var(--anatomy-muted); font-size: 10px; line-height: 1.65; }
+.free-slice-segments { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.free-slice-segments button, .free-slice-actions button, .free-slice-normal > button { padding: 7px 8px; border: 1px solid var(--anatomy-line); border-radius: 4px; background: var(--anatomy-bg); font-size: 11px; }
+.free-slice-segments button[aria-pressed=true] { color: var(--anatomy-accent); border-color: var(--anatomy-accent); background: var(--anatomy-soft); }
+.free-slice-toggles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; font-size: 10px; }
+.free-slice-toggles label { display: flex; gap: 7px; align-items: center; }
+.free-slice-toggles input { accent-color: var(--anatomy-accent); }
+.free-slice-axis { margin-top: 12px; --axis-color: var(--anatomy-accent); }
+.free-slice-axis-x { --axis-color: #a35e50; }
+.free-slice-axis-y { --axis-color: #4e8765; }
+.free-slice-axis-z { --axis-color: #4d78a3; }
+.free-slice-axis > label { display: grid; grid-template-columns: minmax(0, 1fr) 112px 23px; align-items: center; gap: 8px; color: var(--anatomy-muted); font-size: 10px; }
+.free-slice-axis > label > span:first-child { color: var(--axis-color); font-size: 12px; font-weight: 650; }
+.free-slice-controls input[type=number], .free-slice-start select { width: 100%; min-width: 0; padding: 5px 7px; border: 1px solid var(--anatomy-line); border-radius: 4px; color: var(--anatomy-ink); background: var(--anatomy-bg); font-size: 11px; font-variant-numeric: tabular-nums; }
+.free-slice-axis input[type=range] { width: 100%; margin: 11px 0 5px; accent-color: var(--axis-color); }
+.free-slice-axis input[type=range]::-webkit-slider-thumb { background: var(--axis-color); }
+.free-slice-axis input[type=range]::-moz-range-thumb { background: var(--axis-color); }
+.free-slice-range-actions { display: flex; justify-content: space-between; gap: 8px; margin-top: 9px; }
+.free-slice-range-actions button { color: var(--anatomy-accent); font-size: 10px; padding: 4px 0; }
+.free-slice-normal { margin-top: 13px; font-size: 10px; }
+.free-slice-normal > summary { color: var(--anatomy-muted); padding: 5px 0; }
+.free-slice-normal > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin: 9px 0; }
+.free-slice-normal label { display: grid; gap: 4px; }
+.free-slice-normal > p { color: var(--anatomy-warm); margin: 7px 0; }
+.free-slice-start { display: grid; gap: 7px; color: var(--anatomy-muted); font-size: 10px; }
+.free-slice-actions { display: flex; gap: 8px; margin-top: 12px; }
+.free-slice-actions button { flex: 1; }
+.free-slice-empty { display: flex; height: 100%; align-items: center; justify-content: center; flex-direction: column; gap: 12px; color: var(--anatomy-muted); }
+.free-slice-empty h2 { font-weight: 400; font-size: 18px; }
+.free-slice-empty button { border: 1px solid var(--anatomy-line); padding: 8px 14px; border-radius: 5px; }

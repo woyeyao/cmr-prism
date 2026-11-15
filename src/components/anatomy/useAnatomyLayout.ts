@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { HTMLAttributes, RefObject } from "react";
+import { useI18n } from "@/i18n";
 
 export interface AnatomyLayout {
   railWidth: number;
   inspectorWidth: number;
   stageHeight: number;
   sectionRatio: number;
+  /** Extra image viewport height beyond its intrinsic aspect ratio, in pixels. */
   referenceHeight: number;
 }
 
@@ -18,7 +20,7 @@ const DEFAULT_LAYOUT: AnatomyLayout = {
   inspectorWidth: 330,
   stageHeight: 360,
   sectionRatio: 0.5,
-  referenceHeight: 390
+  referenceHeight: 0
 };
 
 const LABELS: Record<AnatomyLayoutKey, string> = {
@@ -53,7 +55,7 @@ function bounds(key: AnatomyLayoutKey, layout: AnatomyLayout, size: Dimensions):
     case "railWidth": return [140, Math.max(140, Math.min(300, availableWidth - layout.inspectorWidth))];
     case "inspectorWidth": return [280, Math.max(280, Math.min(600, availableWidth - layout.railWidth))];
     case "stageHeight": return [260, maxHeight];
-    case "referenceHeight": return [260, maxHeight];
+    case "referenceHeight": return [-160, 600];
     case "sectionRatio": return [0.25, 0.75];
   }
 }
@@ -71,6 +73,7 @@ export function useAnatomyLayout({ workspaceRef, studyRef }: {
   workspaceRef: RefObject<HTMLElement | null>;
   studyRef: RefObject<HTMLElement | null>;
 }) {
+  const { t } = useI18n();
   const [layout, setLayout] = useState<AnatomyLayout>(DEFAULT_LAYOUT);
   const [isResizing, setIsResizing] = useState(false);
   const dimensions = useRef<Dimensions>({ width: 0, height: 0, studyWidth: 0 });
@@ -135,14 +138,16 @@ export function useAnatomyLayout({ workspaceRef, studyRef }: {
     return {
       role: "separator",
       tabIndex: 0,
-      "aria-label": LABELS[key],
+      "aria-label": t(LABELS[key]),
       "aria-orientation": horizontal(key) ? "vertical" : "horizontal",
       "aria-valuemin": displayValue(min),
       "aria-valuemax": displayValue(max),
       "aria-valuenow": displayValue(layout[key]),
-      "aria-valuetext": `${displayValue(layout[key])}${ratio ? "%" : " 像素"}`,
+      "aria-valuetext": key === "referenceHeight"
+        ? t("等比高度 {offset} 像素", { offset: `${layout[key] >= 0 ? "+" : ""}${displayValue(layout[key])}` })
+        : `${displayValue(layout[key])}${ratio ? "%" : ` ${t("像素")}`}`,
       "data-testid": `resize-${key}`,
-      title: `${LABELS[key]} · 拖动或方向键调整，双击还原`,
+      title: `${t(LABELS[key])} · ${t("拖动或方向键调整，双击还原")}`,
       style: { touchAction: "none" },
       onPointerDown: (event) => {
         if (!event.isPrimary || event.button !== 0) return;

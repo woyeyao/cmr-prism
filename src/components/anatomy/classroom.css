@@ -1,0 +1,5 @@
+.classroom-modes { display: inline-flex; align-items: center; gap: 3px; padding: 3px; border: 1px solid var(--anatomy-line); border-radius: 5px; white-space: nowrap; }
+.classroom-modes button { padding: 5px 8px; border: 0; border-radius: 3px; color: var(--anatomy-muted); background: transparent; font-size: 11px; }
+.classroom-modes button[aria-pressed=true] { background: var(--anatomy-soft); color: var(--anatomy-ink); }
+.classroom-source { padding: 7px 10px; font-size: 11px; color: var(--anatomy-muted); white-space: nowrap; text-decoration: none; }
+.classroom-source:hover { color: var(--anatomy-ink); }

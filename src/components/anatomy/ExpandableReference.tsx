@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
+import { useI18n } from "@/i18n";
 
 export function keepPanelFocus(event: KeyboardEvent<HTMLElement>) {
   if (event.key !== "Tab" || event.altKey || event.ctrlKey || event.metaKey) return;
@@ -25,7 +26,10 @@ export default function ExpandableReference({ sourceSwitch, children }: {
   sourceSwitch: ReactNode;
   children: ReactNode;
 }) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
+  const slotRef = useRef<HTMLDivElement>(null);
+  const collapsedHeight = useRef(0);
   const panelRef = useRef<HTMLElement>(null);
   const toggleRef = useRef<HTMLButtonElement>(null);
 
@@ -55,24 +59,27 @@ export default function ExpandableReference({ sourceSwitch, children }: {
     };
   }, [expanded]);
 
-  return <div className="anatomy-reference-slot">
+  return <div className="anatomy-reference-slot" ref={slotRef} style={expanded ? { height: collapsedHeight.current } : undefined}>
     {expanded && <div className="anatomy-reference-backdrop" aria-hidden="true" onClick={() => setExpanded(false)} />}
     <section ref={panelRef} className={`anatomy-panel anatomy-reference-panel${expanded ? " is-expanded" : ""}`}
       role={expanded ? "dialog" : undefined} aria-modal={expanded || undefined}
-      aria-label={expanded ? "放大 CMR 对照" : "真实 CMR 对照"} tabIndex={expanded ? -1 : undefined}
+      aria-label={t(expanded ? "放大 CMR 对照" : "真实 CMR 对照")} tabIndex={expanded ? -1 : undefined}
       onKeyDown={(event) => {
         if (!expanded) return;
         if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setExpanded(false); }
         keepPanelFocus(event);
       }}>
-      <header><div><span className="anatomy-eyebrow">THE MR CONNECTION</span><h3>真实 CMR 对照</h3></div>
+      <header><div><span className="anatomy-eyebrow">THE MR CONNECTION</span><h3>{t("真实 CMR 对照")}</h3></div>
         <button type="button" className="anatomy-expand-section" ref={toggleRef}
-          aria-label={expanded ? "关闭 CMR 放大" : "放大 CMR 对照"} aria-expanded={expanded}
-          onClick={() => setExpanded((value) => !value)}>{expanded ? "收起" : "放大"} <span aria-hidden="true">{expanded ? "×" : "⤢"}</span></button>
+          aria-label={t(expanded ? "关闭 CMR 放大" : "放大 CMR 对照")} aria-expanded={expanded}
+          onClick={() => {
+            if (!expanded) collapsedHeight.current = slotRef.current?.getBoundingClientRect().height ?? 0;
+            setExpanded((value) => !value);
+          }}>{t(expanded ? "收起" : "放大")} <span aria-hidden="true">{expanded ? "×" : "⤢"}</span></button>
       </header>
       <div className="anatomy-reference-toolbar">{sourceSwitch}</div>
       <div className="anatomy-reference-content">{children}</div>
-      <p className="anatomy-reference-note">静态图谱与 MR 并排比较解剖关系；两者未做空间配准。</p>
+      <p className="anatomy-reference-note">{t("静态图谱与 MR 并排比较解剖关系；两者未做空间配准。")}</p>
     </section>
   </div>;
 }

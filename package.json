@@ -1,6 +1,6 @@
 {
   "name": "cmr-prism",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -16,7 +16,9 @@
     "verify:browser": "node scripts/visual-sample.mjs",
     "verify:fluidity": "node scripts/verify-fluidity.mjs",
     "verify:controls": "node scripts/verify-viewer-controls.mjs",
-    "audit:publication": "node scripts/audit-publication.mjs"
+    "audit:publication": "node scripts/audit-publication.mjs",
+    "build:pages": "node scripts/build-pages.mjs",
+    "verify:pages": "node scripts/verify-pages.mjs"
   },
   "dependencies": {
     "@itk-wasm/image-io": "1.6.1",

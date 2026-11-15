@@ -93,7 +93,9 @@ function scanContent(path, content, approvedImage) {
     return;
   }
   if (approvedImage) return;
-  if (path !== '.gitignore' && !/\.(?:ts|tsx|css|svg|json|mjs|md|txt)$/.test(path)) report(path, 'unreviewed-file-type');
+  // Only the reviewed Pages workflow is permitted; other YAML still needs review.
+  if (path !== '.gitignore' && path !== '.github/workflows/pages.yml'
+    && !/\.(?:ts|tsx|css|svg|json|mjs|md|txt)$/.test(path)) report(path, 'unreviewed-file-type');
   if (content.includes(0)) { report(path, 'unexpected-binary'); return; }
   scanText(content.toString('utf8'), path);
 }

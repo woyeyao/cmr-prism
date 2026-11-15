@@ -2,7 +2,9 @@ import { readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readImageNode } from "@itk-wasm/image-io";
+import yauzl from "yauzl";
 import { disposeStudy, getStudy, importStudy, readScalarFrame, StudySourceError, STUDY_SOURCE_LIMITS } from "./studySource";
+import { POST } from "../app/api/studies/route";
 
 vi.mock("@itk-wasm/image-io", () => ({ readImageNode: vi.fn() }));
 
@@ -269,8 +271,125 @@ function zipStore(name: string, content: Buffer): Buffer {
 }
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   vi.mocked(readImageNode).mockReset();
   await Promise.all(studies.splice(0).map((id) => disposeStudy(id).catch(() => undefined)));
+});
+
+describe("cancelled imports", () => {
+  const registry = () => (globalThis as unknown as {
+    __cmrPrismStudySourceRegistryV1: { sessions: Map<string, unknown>; decodedCache: Map<string, { studyId: string }> }
+  }).__cmrPrismStudySourceRegistryV1;
+  const snapshot = async () => ({
+    sessions: new Set(registry().sessions.keys()),
+    directories: new Set((await readdir(tmpdir())).filter(name => name.startsWith("cmr-prism-")))
+  });
+  const expectClean = async (before: Awaited<ReturnType<typeof snapshot>>) => {
+    expect(new Set(registry().sessions.keys())).toEqual(before.sessions);
+    expect(new Set((await readdir(tmpdir())).filter(name => name.startsWith("cmr-prism-")))).toEqual(before.directories);
+    expect([...registry().decodedCache.values()].every(entry => before.sessions.has(entry.studyId))).toBe(true);
+  };
+
+  it("rejects an already-cancelled import and an HTTP abort after multipart parsing", async () => {
+    const before = await snapshot(), controller = new AbortController();
+    controller.abort();
+    const stream = vi.fn(() => { throw new Error("must not consume a cancelled upload"); });
+    await expect(importStudy([{ name: "cancelled.dcm", size: 1, stream } as unknown as File], controller.signal))
+      .rejects.toMatchObject({ code: "IMPORT_CANCELLED", status: 499 });
+    expect(stream).not.toHaveBeenCalled();
+    const requestController = new AbortController(), form = new FormData();
+    form.append("files", upload(classicDicom()));
+    const response = await POST({
+      headers: new Headers(), signal: requestController.signal,
+      formData: async () => { requestController.abort(); return form; }
+    } as unknown as Request);
+    expect(response.status).toBe(499);
+    expect(await response.json()).toMatchObject({ code: "IMPORT_CANCELLED" });
+    await expectClean(before);
+  });
+
+  it("cancels a partially copied upload stream and removes the private directory", async () => {
+    const before = await snapshot(), controller = new AbortController();
+    const cancelled = vi.fn();
+    let started!: () => void;
+    const ready = new Promise<void>(resolve => { started = resolve; });
+    const file = {
+      name: "partial.dcm", size: 4096,
+      stream: () => new ReadableStream<Uint8Array>({
+        start(streamController) { streamController.enqueue(new Uint8Array(32)); started(); },
+        cancel: cancelled
+      })
+    } as unknown as File;
+    const pending = importStudy([file], controller.signal);
+    const rejected = expect(pending).rejects.toMatchObject({ code: "IMPORT_CANCELLED" });
+    await ready;
+    controller.abort();
+    await rejected;
+    expect(cancelled).toHaveBeenCalledOnce();
+    await expectClean(before);
+  });
+
+  it("closes both the ZIP entry stream and archive handle before removing cancelled extraction", async () => {
+    const before = await snapshot(), controller = new AbortController();
+    let entryClosed = false, archiveClosed = false;
+    const openReadStream = yauzl.ZipFile.prototype.openReadStream;
+    vi.spyOn(yauzl.ZipFile.prototype, "openReadStream").mockImplementation(function (this: yauzl.ZipFile, entry, callback) {
+      this.once("close", () => { archiveClosed = true; });
+      openReadStream.call(this, entry, (error, stream) => {
+        if (stream) {
+          stream.once("close", () => { entryClosed = true; });
+          stream.once("data", () => controller.abort());
+        }
+        callback(error, stream);
+      });
+    });
+    const content = Buffer.concat([classicDicom(), Buffer.alloc(256 * 1024)]);
+    await expect(importStudy([upload(zipStore("image.dcm", content), "cancelled.zip")], controller.signal))
+      .rejects.toMatchObject({ code: "IMPORT_CANCELLED" });
+    expect(controller.signal.aborted).toBe(true);
+    expect(entryClosed).toBe(true);
+    expect(archiveClosed).toBe(true);
+    await expectClean(before);
+  });
+
+  it("waits for active decode workers before cleaning a cancelled parse", async () => {
+    const before = await snapshot(), controller = new AbortController();
+    let finishDecode!: () => void, decodeStarted!: () => void;
+    const ready = new Promise<void>(resolve => { decodeStarted = resolve; });
+    const decode = new Promise<void>(resolve => { finishDecode = resolve; });
+    vi.mocked(readImageNode).mockImplementation(async () => {
+      decodeStarted(); await decode; return mockItkImage() as never;
+    });
+    const compressed = upload(classicDicom(undefined, MR_SOP, "1.2.826.0.1.3680043.10.900.181", 0, "1.2.840.10008.1.2.4.50"));
+    const pending = importStudy([compressed, upload(classicDicom())], controller.signal);
+    const rejected = expect(pending).rejects.toMatchObject({ code: "IMPORT_CANCELLED" });
+    await ready;
+    controller.abort(); finishDecode();
+    await rejected;
+    await expectClean(before);
+  });
+
+  it("removes a session and decoded pixels when cancellation arrives during catalog finalization", async () => {
+    const before = await snapshot(), controller = new AbortController();
+    const instance = "1.2.826.0.1.3680043.10.900.182";
+    const noWindow = baseElements(MR_SOP, instance).filter(entry => entry.readUInt16LE(0) !== 0x0028 || ![0x1050, 0x1051].includes(entry.readUInt16LE(2)));
+    const bytes = part10(Buffer.concat([
+      ...noWindow, element(0x0020, 0x0032, "DS", padded("0\\0\\0")),
+      element(0x7fe0, 0x0010, "OW", int16Pixels([-5, 0, 5, 10]))
+    ]), MR_SOP, instance, "1.2.840.10008.1.2.4.50");
+    let calls = 0, registeredId: string | undefined;
+    vi.mocked(readImageNode).mockImplementation(async () => {
+      if (++calls === 2) {
+        registeredId = [...registry().sessions.keys()].find(id => !before.sessions.has(id));
+        controller.abort();
+      }
+      return mockItkImage() as never;
+    });
+    await expect(importStudy([upload(bytes)], controller.signal)).rejects.toMatchObject({ code: "IMPORT_CANCELLED" });
+    expect(registeredId).toBeDefined();
+    expect(() => getStudy(registeredId!)).toThrowError(StudySourceError);
+    await expectClean(before);
+  });
 });
 
 describe("StudySource DICOM import and scalar reads", () => {
